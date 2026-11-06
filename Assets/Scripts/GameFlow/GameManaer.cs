@@ -2,21 +2,12 @@ using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
-    public static GameManager Instance;
-
-    [Header("Scenario Settings")]
+    public static GameManager Instance { get; private set; }
     public float scenarioDuration = 180f;
-
     private float remainingTime;
-
     public bool scenarioRunning = false;
-
     public bool scenarioCompleted = false;
-
-
-    // ==========================================
-    // INITIALIZATION
-    // ==========================================
+    public bool scenarioPaused = false;
 
     private void Awake()
     {
@@ -29,20 +20,14 @@ public class GameManager : MonoBehaviour
         Instance = this;
     }
 
-
     private void Start()
     {
-        StartScenario();
+        ResetScenario();
     }
-
-
-    // ==========================================
-    // UPDATE TIMER
-    // ==========================================
 
     private void Update()
     {
-        if (!scenarioRunning)
+        if (!scenarioRunning || scenarioPaused)
         {
             return;
         }
@@ -57,63 +42,60 @@ public class GameManager : MonoBehaviour
         }
     }
 
-
-    // ==========================================
-    // START SCENARIO
-    // ==========================================
+    public void ResetScenario()
+    {
+        remainingTime = scenarioDuration;
+        scenarioRunning = false;
+        scenarioPaused = false;
+        scenarioCompleted = false;
+    }
 
     public void StartScenario()
     {
+        if (scenarioCompleted)
+        {
+            ResetScenario();
+        }
+
         remainingTime = scenarioDuration;
-
+        scenarioPaused = false;
         scenarioRunning = true;
-        scenarioCompleted = false;
-
-        Debug.Log(
-            "=== GOLDEN HOUR SCENARIO STARTED ==="
-        );
-
-        Debug.Log(
-            "Time available: " +
-            scenarioDuration +
-            " seconds"
-        );
+        Debug.Log("Golden Hour scenario started.");
     }
 
+    public void PauseScenario()
+    {
+        if (scenarioRunning)
+        {
+            scenarioPaused = true;
+        }
+    }
 
-    // ==========================================
-    // END SCENARIO
-    // ==========================================
+    public void ResumeScenario()
+    {
+        if (scenarioRunning)
+        {
+            scenarioPaused = false;
+        }
+    }
 
     public void EndScenario()
     {
-        if (!scenarioRunning)
+        if (scenarioCompleted)
         {
             return;
         }
 
         scenarioRunning = false;
+        scenarioPaused = false;
         scenarioCompleted = true;
-
-        Debug.Log(
-            "=== GOLDEN HOUR SCENARIO ENDED ==="
-        );
+        Debug.Log("Golden Hour scenario ended.");
     }
-
-
-    // ==========================================
-    // GET REMAINING TIME
-    // ==========================================
 
     public float GetRemainingTime()
     {
         return remainingTime;
     }
-
-
-    // ==========================================
-    // GET FORMATTED TIME
-    // ==========================================
 
     public string GetFormattedTime()
     {
