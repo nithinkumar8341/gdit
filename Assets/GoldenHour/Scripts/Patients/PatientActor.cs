@@ -3,6 +3,10 @@ using UnityEngine;
 
 namespace GoldenHour
 {
+    /// <summary>
+    /// One injured person in the scene: visual pose (standing if able to walk, otherwise lying),
+    /// interaction collider, triage marker and a live status label.
+    /// </summary>
     public sealed class PatientActor : MonoBehaviour
     {
         public PatientData Data { get; private set; }
@@ -12,146 +16,154 @@ namespace GoldenHour
         public TriageCategory AssignedCategory { get; private set; }
         public bool LastTriageWasCorrect { get; private set; }
 
-        private GameObject triageMarker;
+        /// <summary>World point a rescuer should look at to examine this person.</summary>
+        public Vector3 FocusPoint => transform.TransformPoint(focusLocal);
+
+        private Vector3 focusLocal;
         private Renderer markerRenderer;
+        private TextMeshPro statusLabel;
 
         public void Initialize(PatientData data, GameObject visualPrefab)
         {
             Data = data;
             gameObject.name = data.patientId + " - " + data.patientName;
+            bool lying = !data.canWalk;
 
-            if (visualPrefab != null)
+            Transform visual = visualPrefab != null
+                ? Instantiate(visualPrefab, transform).transform
+                : CreateFallbackVisual();
+            visual.name = "Patient Visual";
+            visual.localScale = Vector3.one;
+            if (lying)
             {
-                GameObject visual = Instantiate(visualPrefab, transform);
-                visual.name = "Patient Visual";
-                visual.transform.localPosition = Vector3.zero;
-                visual.transform.localRotation = Quaternion.identity;
-                visual.transform.localScale = Vector3.one;
+                // Lie on the back, head toward local -Z, raised so the torso rests on the ground.
+                visual.localPosition = new Vector3(0f, 0.14f, 0f);
+                visual.localRotation = Quaternion.Euler(-90f, 0f, 0f);
             }
             else
             {
-                CreateFallbackVisual();
+                visual.localPosition = Vector3.zero;
+                visual.localRotation = Quaternion.identity;
             }
 
-            CapsuleCollider collider = gameObject.AddComponent<CapsuleCollider>();
-            collider.height = 1.65f;
-            collider.radius = 0.38f;
-            collider.center = new Vector3(0f, 0.83f, 0f);
+            foreach (Renderer part in visual.GetComponentsInChildren<Renderer>())
+            {
+                if (part.sharedMaterial != null && part.sharedMaterial.name.Contains("Clothing"))
+                {
+                    MaterialFactory.Tint(part, data.clothingColor);
+                }
 
-            triageMarker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            triageMarker.name = "Triage Marker";
-            triageMarker.transform.SetParent(transform, false);
-            triageMarker.transform.localPosition = new Vector3(0f, 2.05f, 0f);
-            triageMarker.transform.localScale = Vector3.one * 0.22f;
-            Collider markerCollider = triageMarker.GetComponent<Collider>();
-            Destroy(markerCollider);
-            markerRenderer = triageMarker.GetComponent<Renderer>();
-            triageMarker.SetActive(false);
+                Collider partCollider = part.GetComponent<Collider>();
+                if (partCollider != null) Destroy(partCollider);
+            }
 
-            GameObject labelObject = new GameObject("Patient Number");
+            BoxCollider body = gameObject.AddComponent<BoxCollider>();
+            if (lying)
+            {
+                body.center = new Vector3(0f, 0.2f, -0.85f);
+                body.size = new Vector3(0.8f, 0.4f, 1.85f);
+                focusLocal = new Vector3(0f, 0.25f, -1.0f);
+            }
+            else
+            {
+                body.center = new Vector3(0f, 0.88f, 0f);
+                body.size = new Vector3(0.75f, 1.76f, 0.5f);
+                focusLocal = new Vector3(0f, 1.2f, 0f);
+            }
+
+            if (data.severeBleeding) CreateBleedingCue(lying);
+
+            float labelHeight = lying ? 1.25f : 2.25f;
+            Vector3 labelPosition = new Vector3(0f, labelHeight, lying ? -0.9f : 0f);
+            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            marker.name = "Triage Marker";
+            marker.transform.SetParent(transform, false);
+            marker.transform.localPosition = labelPosition + Vector3.up * 0.42f;
+            marker.transform.localScale = Vector3.one * 0.2f;
+            Destroy(marker.GetComponent<Collider>());
+            markerRenderer = marker.GetComponent<Renderer>();
+            markerRenderer.sharedMaterial = MaterialFactory.Create(Palette.Slate);
+
+            GameObject labelObject = new GameObject("Status Label");
             labelObject.transform.SetParent(transform, false);
-            labelObject.transform.localPosition = new Vector3(0f, 1.76f, 0f);
-            TextMeshPro label = labelObject.AddComponent<TextMeshPro>();
-            label.text = data.patientId;
-            label.fontSize = 3.2f;
-            label.alignment = TextAlignmentOptions.Center;
-            label.color = Color.white;
-            label.outlineWidth = 0.2f;
-            label.outlineColor = new Color32(20, 25, 30, 255);
-            label.rectTransform.sizeDelta = new Vector2(2f, 0.4f);
+            labelObject.transform.localPosition = labelPosition;
+            statusLabel = labelObject.AddComponent<TextMeshPro>();
+            statusLabel.fontSize = 1.6f;
+            statusLabel.alignment = TextAlignmentOptions.Center;
+            statusLabel.color = Color.white;
+            statusLabel.outlineWidth = 0.25f;
+            statusLabel.outlineColor = new Color32(15, 18, 22, 255);
+            statusLabel.rectTransform.sizeDelta = new Vector2(3f, 0.7f);
+            statusLabel.textWrappingMode = TextWrappingModes.NoWrap;
             labelObject.AddComponent<PatientBillboard>();
+            RefreshStatus();
         }
 
         public bool MarkExamined()
         {
-            if (HasBeenExamined)
-            {
-                return false;
-            }
-
+            if (HasBeenExamined) return false;
             HasBeenExamined = true;
+            RefreshStatus();
             return true;
         }
 
-        public bool SetTriage(TriageCategory category)
+        public void SetTriage(TriageCategory category)
         {
-            bool wasTriaged = HasBeenTriaged;
-            bool previouslyCorrect = LastTriageWasCorrect;
             HasBeenTriaged = true;
             AssignedCategory = category;
             LastTriageWasCorrect = category == TriageEvaluator.Evaluate(Data);
-
-            if (triageMarker != null)
-            {
-                triageMarker.SetActive(true);
-                markerRenderer.material.color = CategoryColor(category);
-            }
-
-            return !wasTriaged || previouslyCorrect != LastTriageWasCorrect;
+            if (markerRenderer != null) MaterialFactory.Tint(markerRenderer, Palette.ForCategory(category));
+            RefreshStatus();
         }
 
         public void MarkAidCompleted()
         {
             HasReceivedAid = true;
+            RefreshStatus();
         }
 
-        private void CreateFallbackVisual()
+        private void RefreshStatus()
         {
-            CreatePart("Body", PrimitiveType.Capsule, new Vector3(0f, 0.9f, 0f),
-                new Vector3(0.52f, 0.68f, 0.34f), new Color32(72, 101, 128, 255));
-            CreatePart("Head", PrimitiveType.Sphere, new Vector3(0f, 1.68f, 0f),
-                new Vector3(0.3f, 0.34f, 0.3f), new Color32(205, 166, 133, 255));
-            CreatePart("Left Arm", PrimitiveType.Capsule, new Vector3(-0.39f, 0.94f, 0f),
-                new Vector3(0.18f, 0.55f, 0.18f), new Color32(72, 101, 128, 255));
-            CreatePart("Right Arm", PrimitiveType.Capsule, new Vector3(0.39f, 0.94f, 0f),
-                new Vector3(0.18f, 0.55f, 0.18f), new Color32(72, 101, 128, 255));
-            CreatePart("Left Leg", PrimitiveType.Capsule, new Vector3(-0.16f, 0.28f, 0f),
-                new Vector3(0.2f, 0.55f, 0.2f), new Color32(45, 50, 58, 255));
-            CreatePart("Right Leg", PrimitiveType.Capsule, new Vector3(0.16f, 0.28f, 0f),
-                new Vector3(0.2f, 0.55f, 0.2f), new Color32(45, 50, 58, 255));
+            if (statusLabel == null) return;
+            string state;
+            if (HasReceivedAid) state = "<color=#7FE0A6>AID GIVEN</color>";
+            else if (HasBeenTriaged) state = "<color=#F6D171>AWAITING AID</color>";
+            else if (HasBeenExamined) state = "<color=#CDD3D8>EXAMINED</color>";
+            else state = "<color=#FF8A8A>NOT ASSESSED</color>";
+
+            string tag = HasBeenTriaged
+                ? "<color=#" + ColorUtility.ToHtmlStringRGB(Palette.ForCategory(AssignedCategory)) + ">" +
+                  AssignedCategory.ToString().ToUpperInvariant() + "</color>  "
+                : string.Empty;
+            statusLabel.text = "<b>" + Data.patientId + "</b>  " + tag + "\n<size=75%>" + state + "</size>";
         }
 
-        private void CreatePart(string partName, PrimitiveType type, Vector3 localPosition,
-            Vector3 localScale, Color color)
+        private void CreateBleedingCue(bool lying)
         {
-            GameObject part = GameObject.CreatePrimitive(type);
-            part.name = partName;
-            part.transform.SetParent(transform, false);
-            part.transform.localPosition = localPosition;
-            part.transform.localScale = localScale;
-            Collider collider = part.GetComponent<Collider>();
-            Destroy(collider);
-            part.GetComponent<Renderer>().material.color = color;
+            GameObject cue = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            cue.name = "Visible Bleeding Cue";
+            cue.transform.SetParent(transform, false);
+            cue.transform.localPosition = lying ? new Vector3(0.45f, 0.015f, -0.95f) : new Vector3(0.3f, 0.015f, 0.1f);
+            cue.transform.localScale = new Vector3(0.55f, 0.005f, 0.4f);
+            Destroy(cue.GetComponent<Collider>());
+            cue.GetComponent<Renderer>().sharedMaterial = MaterialFactory.Create(new Color32(110, 14, 18, 255), 0f, 0.8f);
         }
 
-        private static Color CategoryColor(TriageCategory category)
+        private Transform CreateFallbackVisual()
         {
-            switch (category)
-            {
-                case TriageCategory.Red: return new Color32(218, 48, 55, 255);
-                case TriageCategory.Yellow: return new Color32(243, 185, 49, 255);
-                case TriageCategory.Green: return new Color32(58, 166, 98, 255);
-                default: return new Color32(55, 60, 67, 255);
-            }
-        }
-    }
-
-    public sealed class PatientBillboard : MonoBehaviour
-    {
-        private Camera mainCamera;
-
-        private void LateUpdate()
-        {
-            if (mainCamera == null)
-            {
-                mainCamera = Camera.main;
-            }
-
-            if (mainCamera != null)
-            {
-                transform.rotation = Quaternion.LookRotation(
-                    transform.position - mainCamera.transform.position);
-            }
+            Transform root = new GameObject("Fallback Visual").transform;
+            root.SetParent(transform, false);
+            Material clothing = MaterialFactory.Create(new Color32(72, 101, 128, 255));
+            clothing.name = "Fallback Clothing";
+            Material skin = MaterialFactory.Create(new Color32(205, 166, 133, 255));
+            Material trousers = MaterialFactory.Create(new Color32(45, 50, 58, 255));
+            AccidentEnvironment.Primitive(root, "Body", PrimitiveType.Capsule, new Vector3(0f, 1.05f, 0f),
+                new Vector3(0.48f, 0.4f, 0.3f), clothing);
+            AccidentEnvironment.Primitive(root, "Head", PrimitiveType.Sphere, new Vector3(0f, 1.62f, 0f),
+                new Vector3(0.26f, 0.3f, 0.26f), skin);
+            AccidentEnvironment.Primitive(root, "Legs", PrimitiveType.Capsule, new Vector3(0f, 0.4f, 0f),
+                new Vector3(0.36f, 0.42f, 0.26f), trousers);
+            return root;
         }
     }
 }

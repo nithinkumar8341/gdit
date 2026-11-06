@@ -1,74 +1,89 @@
-using System;
 using System.Collections.Generic;
 using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 
 namespace GoldenHour
 {
+    /// <summary>
+    /// Coordinates the scenario loop: briefing → find/examine → triage → first-aid kit →
+    /// supply selection → simulated aid → objectives → final report.
+    /// </summary>
     public sealed class GameplayController : MonoBehaviour
     {
-        private const string MainMenuScene = "MainMenu";
-        private static readonly Color Red = new Color32(194, 43, 52, 255);
-        private static readonly Color Yellow = new Color32(229, 171, 49, 255);
-        private static readonly Color Green = new Color32(53, 145, 88, 255);
-        private static readonly Color Charcoal = new Color32(24, 32, 41, 250);
-        private static readonly Color Muted = new Color32(64, 77, 89, 255);
+        public const string MainMenuScene = "MainMenu";
+        public const float InteractionRange = 3.6f;
 
+        private const string Disclaimer =
+            "This is an educational simulation, not medical training or medical advice. " +
+            "In a real emergency, call local emergency services and follow qualified guidance.";
+
+        [Header("Existing scene systems")]
         public GameManager gameManager;
         public ScoreManager scoreManager;
         public FirstPersonPlayer player;
         public Transform playerCamera;
+
+        [Header("Scenario data")]
         public List<PatientData> patientProfiles = new List<PatientData>();
         public List<SupplyData> supplies = new List<SupplyData>();
+
+        [Header("Assets")]
+        public Material baseMaterial;
         public GameObject mannequinPrefab;
         public GameObject kitPrefab;
-        public GameObject roadBarrierPrefab;
-        public AudioClip ambience;
-        public AudioClip buttonClick;
-        public AudioClip kitOpen;
-        public AudioClip objectiveComplete;
-        public AudioClip patientInteraction;
+
+        private static readonly Vector3[] PatientPositions =
+        {
+            new Vector3(4.4f, 0f, -2.5f),
+            new Vector3(-2.8f, 0f, 1.2f),
+            new Vector3(3.4f, 0f, 9.2f),
+            new Vector3(-3.6f, 0f, 9.6f),
+            new Vector3(0.6f, 0f, 13.6f)
+        };
+
+        private static readonly float[] PatientYaw = { -100f, 70f, -150f, 160f, 95f };
 
         private readonly List<PatientActor> patients = new List<PatientActor>();
-        private readonly HashSet<int> completedObjectives = new HashSet<int>();
-        private Canvas canvas;
+        private readonly ObjectiveTracker objectives = new ObjectiveTracker();
         private GoldenHourAudio audioManager;
-        private TMP_Text promptText;
-        private TMP_Text objectivesText;
-        private TMP_Text statusText;
-        private TMP_Text scoreText;
-        private bool simulationStarted;
-        private bool simulationFinished;
-        private PatientActor inventoryPatient;
+        private GameplayHud hud;
+        private ModalWindow modal;
         private FirstAidKitInteractable firstAidKit;
+        private bool paused;
+
+        public IReadOnlyList<PatientActor> Patients => patients;
+        public ObjectiveTracker Objectives => objectives;
+        public FirstAidKitInteractable Kit => firstAidKit;
+        public ModalWindow Modal => modal;
+        public bool HasStarted { get; private set; }
+        public bool IsFinished { get; private set; }
+        public string FinalReport { get; private set; } = string.Empty;
 
         private void Start()
         {
+            MaterialFactory.Template = baseMaterial;
             ResolveSceneReferences();
-            BuildEnvironment();
+            AccidentEnvironment environment = GetComponent<AccidentEnvironment>();
+            if (environment == null) environment = gameObject.AddComponent<AccidentEnvironment>();
+            environment.Build();
+            PlacePlayer();
             BuildPatients();
             BuildKit();
-            BuildHud();
+
             audioManager = GetComponent<GoldenHourAudio>();
-            if (audioManager == null)
-            {
-                audioManager = gameObject.AddComponent<GoldenHourAudio>();
-                audioManager.ambience = ambience;
-                audioManager.buttonClick = buttonClick;
-                audioManager.kitOpen = kitOpen;
-                audioManager.objectiveComplete = objectiveComplete;
-                audioManager.patientInteraction = patientInteraction;
-            }
-            UiFactory.ButtonPressed = audioManager.PlayButton;
-            player.SetControlsEnabled(false);
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
+            UiFactory.ButtonPressed = audioManager != null ? audioManager.PlayButton : (System.Action)null;
+            Canvas canvas = UiFactory.CreateCanvas("Golden Hour Gameplay UI");
+            hud = new GameplayHud(canvas.transform);
+            modal = new ModalWindow(canvas.transform);
+            objectives.Completed += OnObjectiveCompleted;
+
+            if (scoreManager != null) scoreManager.ResetScore();
+            if (gameManager != null) gameManager.ResetScenario();
             ShowBriefing();
-            UpdateObjectives();
+            RefreshHud();
         }
 
         private void ResolveSceneReferences()
@@ -82,114 +97,7 @@ namespace GoldenHour
             }
         }
 
-        private void BuildEnvironment()
-        {
-            GameObject environment = new GameObject("Accident Scene");
-            Material ground = MakeMaterial(new Color32(96, 116, 95, 255));
-            Material asphalt = MakeMaterial(new Color32(52, 58, 64, 255));
-            Material concrete = MakeMaterial(new Color32(157, 161, 160, 255));
-            Material paint = MakeMaterial(new Color32(239, 222, 164, 255));
-            Material orange = MakeMaterial(new Color32(225, 107, 46, 255));
-
-            CreateBox(environment.transform, "Ground", new Vector3(0f, -0.24f, 4f),
-                new Vector3(70f, 0.35f, 68f), ground);
-            CreateBox(environment.transform, "Road", new Vector3(0f, -0.02f, 4f),
-                new Vector3(11f, 0.12f, 42f), asphalt);
-            CreateBox(environment.transform, "West Sidewalk", new Vector3(-6.3f, 0.03f, 4f),
-                new Vector3(1.6f, 0.2f, 42f), concrete);
-            CreateBox(environment.transform, "East Sidewalk", new Vector3(6.3f, 0.03f, 4f),
-                new Vector3(1.6f, 0.2f, 42f), concrete);
-
-            for (int z = -14; z <= 22; z += 5)
-            {
-                CreateBox(environment.transform, "Road Centre Marking",
-                    new Vector3(0f, 0.05f, z), new Vector3(0.12f, 0.025f, 2.2f), paint);
-            }
-
-            if (roadBarrierPrefab != null)
-            {
-                for (int i = 0; i < 4; i++)
-                {
-                    GameObject barrier = Instantiate(roadBarrierPrefab,
-                        new Vector3(i % 2 == 0 ? -5.5f : 5.5f, 0f, -1f + i * 5f),
-                        Quaternion.identity, environment.transform);
-                    barrier.name = "Road Barrier " + (i + 1);
-                }
-            }
-            else
-            {
-                for (int i = 0; i < 4; i++)
-                {
-                    GameObject cone = CreatePrimitive(environment.transform, "Road Cone",
-                        PrimitiveType.Cylinder, new Vector3(i % 2 == 0 ? -5.3f : 5.3f,
-                            0.48f, -1f + i * 5f), new Vector3(0.38f, 0.48f, 0.38f), orange);
-                }
-            }
-
-            BuildDamagedVehicle(environment.transform, asphalt, concrete, orange);
-            BuildRoadside(environment.transform, ground, concrete);
-            ConfigurePlayer();
-
-            RenderSettings.ambientLight = new Color32(166, 174, 184, 255);
-            RenderSettings.ambientIntensity = 1.15f;
-        }
-
-        private void BuildDamagedVehicle(Transform parent, Material dark, Material glass,
-            Material accent)
-        {
-            Transform car = new GameObject("Damaged Vehicle").transform;
-            car.SetParent(parent, false);
-            car.position = new Vector3(-2.2f, 0f, 3f);
-            car.rotation = Quaternion.Euler(0f, -18f, 0f);
-            CreateBox(car, "Body", new Vector3(0f, 0.62f, 0f),
-                new Vector3(3.2f, 0.72f, 1.6f), MakeMaterial(new Color32(113, 69, 57, 255)));
-            CreateBox(car, "Roof", new Vector3(-0.2f, 1.2f, 0f),
-                new Vector3(1.55f, 0.55f, 1.4f), glass);
-            CreateBox(car, "Hood", new Vector3(1.05f, 0.86f, 0.08f),
-                new Vector3(1f, 0.18f, 1.35f), accent);
-            for (int side = -1; side <= 1; side += 2)
-            {
-                for (int axle = -1; axle <= 1; axle += 2)
-                {
-                    GameObject wheel = CreatePrimitive(car, "Wheel", PrimitiveType.Cylinder,
-                        new Vector3(axle * 1.05f, 0.32f, side * 0.83f),
-                        new Vector3(0.62f, 0.22f, 0.62f), dark);
-                    wheel.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
-                }
-            }
-
-            CreateBox(parent, "Scattered Debris", new Vector3(-4.6f, 0.16f, 5.7f),
-                new Vector3(0.65f, 0.28f, 0.46f), dark).transform.rotation =
-                Quaternion.Euler(0f, 28f, 13f);
-        }
-
-        private void BuildRoadside(Transform parent, Material foliage, Material building)
-        {
-            Material trunk = MakeMaterial(new Color32(105, 78, 57, 255));
-            Material wall = MakeMaterial(new Color32(196, 198, 187, 255));
-            for (int i = 0; i < 4; i++)
-            {
-                float z = -12f + i * 10f;
-                CreateBox(parent, "Building", new Vector3(i % 2 == 0 ? -13f : 13f, 3f, z),
-                    new Vector3(9f, 6f, 9f), wall);
-                CreateBox(parent, "Building Roof", new Vector3(i % 2 == 0 ? -13f : 13f, 6.15f, z),
-                    new Vector3(9.4f, 0.3f, 9.4f), building);
-                CreateBox(parent, "Window", new Vector3(i % 2 == 0 ? -13f : 13f, 3.2f, z + 4.56f),
-                    new Vector3(2f, 1.7f, 0.08f), MakeMaterial(new Color32(123, 164, 185, 255)));
-            }
-
-            for (int i = 0; i < 5; i++)
-            {
-                float x = i % 2 == 0 ? -8f : 8f;
-                float z = -10f + i * 8f;
-                CreatePrimitive(parent, "Tree Trunk", PrimitiveType.Cylinder,
-                    new Vector3(x, 1.35f, z), new Vector3(0.28f, 1.35f, 0.28f), trunk);
-                CreatePrimitive(parent, "Tree Crown", PrimitiveType.Sphere,
-                    new Vector3(x, 3.2f, z), new Vector3(2f, 2.25f, 2f), foliage);
-            }
-        }
-
-        private void ConfigurePlayer()
+        private void PlacePlayer()
         {
             if (player == null)
             {
@@ -197,47 +105,24 @@ namespace GoldenHour
                 return;
             }
 
-            player.transform.SetPositionAndRotation(new Vector3(0f, 0.15f, -14f),
-                Quaternion.identity);
-            if (playerCamera == null)
-            {
-                Camera foundCamera = player.GetComponentInChildren<Camera>();
-                if (foundCamera != null) playerCamera = foundCamera.transform;
-            }
-
-            if (playerCamera != null)
-            {
-                playerCamera.localPosition = new Vector3(0f, 1.52f, 0f);
-                playerCamera.localRotation = Quaternion.identity;
-                playerCamera.gameObject.tag = "MainCamera";
-                player.Configure(playerCamera);
-            }
+            player.Teleport(AccidentEnvironment.PlayerStart, 0f, 8f);
         }
 
         private void BuildPatients()
         {
-            if (patientProfiles == null || patientProfiles.Count != 5)
+            if (patientProfiles == null || patientProfiles.Count != PatientPositions.Length)
             {
-                Debug.LogError("Five PatientData assets must be assigned in the scene.");
+                Debug.LogError("Five PatientData assets must be assigned to GameplayController.");
                 return;
             }
 
-            Vector3[] positions =
-            {
-                new Vector3(-2.8f, 0f, -3f),
-                new Vector3(2.8f, 0f, 0f),
-                new Vector3(-2.7f, 0f, 4f),
-                new Vector3(2.8f, 0f, 8f),
-                new Vector3(-2.5f, 0f, 12f)
-            };
             Transform group = new GameObject("Patients").transform;
-
             for (int i = 0; i < patientProfiles.Count; i++)
             {
                 GameObject patient = new GameObject(patientProfiles[i].patientId);
                 patient.transform.SetParent(group, false);
-                patient.transform.position = positions[i];
-                patient.transform.rotation = Quaternion.Euler(0f, (i % 2 == 0 ? -15f : 15f), 0f);
+                patient.transform.SetPositionAndRotation(PatientPositions[i],
+                    Quaternion.Euler(0f, PatientYaw[i], 0f));
                 PatientActor actor = patient.AddComponent<PatientActor>();
                 actor.Initialize(patientProfiles[i], mannequinPrefab);
                 patients.Add(actor);
@@ -247,610 +132,452 @@ namespace GoldenHour
         private void BuildKit()
         {
             GameObject kit = new GameObject("First Aid Kit");
-            kit.transform.position = new Vector3(4.1f, 0f, 13.1f);
-            kit.transform.rotation = Quaternion.Euler(0f, -20f, 0f);
-            BoxCollider collider = kit.AddComponent<BoxCollider>();
-            collider.size = new Vector3(1.4f, 0.72f, 1.1f);
-            collider.center = new Vector3(0f, 0.38f, 0f);
-
-            Transform lid;
+            kit.transform.SetPositionAndRotation(new Vector3(2.4f, 0.02f, -7.2f),
+                Quaternion.Euler(0f, -20f, 0f));
+            Transform lid = null;
             if (kitPrefab != null)
             {
                 GameObject model = Instantiate(kitPrefab, kit.transform);
                 model.name = "Kit Model";
                 model.transform.localPosition = Vector3.zero;
                 model.transform.localRotation = Quaternion.identity;
-                model.transform.localScale = Vector3.one;
-                lid = FindChild(model.transform, "KitHinge") ?? FindChild(model.transform, "Lid");
-            }
-            else
-            {
-                lid = BuildFallbackKit(kit.transform);
+                lid = FindChild(model.transform, "KitHinge");
             }
 
+            if (lid == null) lid = BuildFallbackKit(kit.transform);
+            BoxCollider collider = kit.AddComponent<BoxCollider>();
+            collider.size = new Vector3(1.3f, 0.75f, 1f);
+            collider.center = new Vector3(0f, 0.37f, 0f);
             firstAidKit = kit.AddComponent<FirstAidKitInteractable>();
             firstAidKit.Initialize(lid);
         }
 
-        private Transform BuildFallbackKit(Transform parent)
+        private static Transform BuildFallbackKit(Transform parent)
         {
-            Material red = MakeMaterial(new Color32(194, 43, 52, 255));
-            Material white = MakeMaterial(Color.white);
-            Material steel = MakeMaterial(new Color32(122, 132, 140, 255), 0.65f);
-            CreateBox(parent, "Kit Base", new Vector3(0f, 0.27f, 0f),
-                new Vector3(1.25f, 0.5f, 0.92f), red);
+            Material red = MaterialFactory.Create(Palette.EmergencyRed);
+            Material white = MaterialFactory.Create(Color.white);
+            AccidentEnvironment.Box(parent, "Kit Base", new Vector3(0f, 0.26f, 0f), new Vector3(1.25f, 0.52f, 0.92f), red);
             Transform hinge = new GameObject("KitHinge").transform;
             hinge.SetParent(parent, false);
-            hinge.localPosition = new Vector3(0f, 0.51f, -0.45f);
-            CreateBox(hinge, "Lid", new Vector3(0f, 0.08f, 0.46f),
-                new Vector3(1.25f, 0.16f, 0.92f), red);
-            CreateBox(hinge, "Cross Vertical", new Vector3(0f, 0.17f, 0.46f),
-                new Vector3(0.22f, 0.035f, 0.58f), white);
-            CreateBox(hinge, "Cross Horizontal", new Vector3(0f, 0.17f, 0.46f),
-                new Vector3(0.55f, 0.035f, 0.2f), white);
-            for (int side = -1; side <= 1; side += 2)
-            {
-                CreateBox(parent, "Kit Latch", new Vector3(side * 0.42f, 0.5f, 0.48f),
-                    new Vector3(0.13f, 0.22f, 0.09f), steel);
-            }
-
-            for (int i = 0; i < 3; i++)
-            {
-                CreateBox(parent, "Visible Supply", new Vector3(-0.32f + i * 0.32f, 0.6f, 0.02f),
-                    new Vector3(0.24f, 0.1f, 0.28f),
-                    MakeMaterial(i == 0 ? new Color32(229, 171, 49, 255) :
-                        i == 1 ? new Color32(235, 231, 217, 255) :
-                        new Color32(78, 143, 111, 255)));
-            }
-
+            hinge.localPosition = new Vector3(0f, 0.52f, -0.46f);
+            AccidentEnvironment.Box(hinge, "Lid", new Vector3(0f, 0.08f, 0.46f), new Vector3(1.27f, 0.16f, 0.94f), red);
+            AccidentEnvironment.Box(hinge, "Cross", new Vector3(0f, 0.17f, 0.46f), new Vector3(0.56f, 0.03f, 0.2f), white);
             return hinge;
-        }
-
-        private void BuildHud()
-        {
-            canvas = UiFactory.CreateCanvas("Golden Hour Gameplay UI");
-            GameObject hud = UiFactory.Panel(canvas.transform, "HUD",
-                Vector2.zero, Vector2.zero, Color.clear, true);
-            hud.GetComponent<Image>().raycastTarget = false;
-            objectivesText = UiFactory.Text(hud.transform, string.Empty, 18,
-                new Vector2(410f, 244f), new Vector2(-560f, 300f), TextAlignmentOptions.TopLeft);
-            SetRectAnchor(objectivesText.rectTransform, new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(24f, -24f));
-            scoreText = UiFactory.Text(hud.transform, string.Empty, 20,
-                new Vector2(320f, 70f), new Vector2(0f, 0f), TextAlignmentOptions.TopRight);
-            SetRectAnchor(scoreText.rectTransform, new Vector2(1f, 1f),
-                new Vector2(1f, 1f), new Vector2(-24f, -24f));
-            promptText = UiFactory.Text(hud.transform, string.Empty, 22,
-                new Vector2(700f, 54f), new Vector2(0f, 82f), TextAlignmentOptions.Center,
-                Color.white);
-            SetRectAnchor(promptText.rectTransform, new Vector2(0.5f, 0f),
-                new Vector2(0.5f, 0f), new Vector2(0f, 82f));
-            UiFactory.Text(hud.transform, "WASD MOVE    MOUSE LOOK    E INTERACT    ESC PAUSE",
-                16, new Vector2(650f, 38f), Vector2.zero, TextAlignmentOptions.Center,
-                new Color32(225, 229, 232, 255));
-            TMP_Text controls = hud.transform.GetChild(hud.transform.childCount - 1)
-                .GetComponent<TMP_Text>();
-            SetRectAnchor(controls.rectTransform, new Vector2(0.5f, 0f),
-                new Vector2(0.5f, 0f), new Vector2(0f, 26f));
-            statusText = UiFactory.Text(hud.transform, string.Empty, 17,
-                new Vector2(850f, 44f), Vector2.zero, TextAlignmentOptions.Center,
-                new Color32(246, 209, 113, 255));
-            SetRectAnchor(statusText.rectTransform, new Vector2(0.5f, 0f),
-                new Vector2(0.5f, 0f), new Vector2(0f, 126f));
-            GameObject crosshair = UiFactory.Panel(hud.transform, "Crosshair",
-                new Vector2(8f, 8f), Vector2.zero, new Color32(255, 255, 255, 225));
-            crosshair.GetComponent<Image>().raycastTarget = false;
-            UpdateScoreDisplay();
         }
 
         private void Update()
         {
-            if (!simulationStarted || simulationFinished || gameManager == null)
+            if (!HasStarted || IsFinished) return;
+            hud.Tick();
+            Keyboard keyboard = Keyboard.current;
+
+            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
             {
+                if (paused || (modal.IsOpen && modal.Closable)) ResumeSimulation();
+                else if (!modal.IsOpen) ShowPauseMenu();
                 return;
             }
 
-            UpdatePrompt();
-
-            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+            if (!modal.IsOpen)
             {
-                if (IsModalOpen())
+                if (player != null && player.transform.position.z > AccidentEnvironment.SceneEntryZ)
                 {
-                    ResumeSimulation();
-                    return;
+                    objectives.Set(ObjectiveTracker.ReachScene, true);
                 }
-                else
-                {
-                    ShowPauseMenu();
-                    return;
-                }
+
+                UpdatePrompt();
+                if (keyboard != null && keyboard.eKey.wasPressedThisFrame) TryInteract();
             }
 
-            if (IsModalOpen())
-            {
-                UpdateScoreDisplay();
-                return;
-            }
-
-            if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
-            {
-                TryInteract();
-            }
-
-            UpdateScoreDisplay();
-            if (!gameManager.scenarioRunning && !gameManager.scenarioPaused)
-            {
-                FinishScenario();
-            }
+            RefreshHud();
+            if (gameManager != null && gameManager.scenarioCompleted) FinishScenario();
         }
+
+        // ------------------------------------------------------------------ flow
 
         private void ShowBriefing()
         {
-            ShowModal("SCENE BRIEFING",
-                "A road accident has occurred. Several people are injured. Assess the victims, prioritise their conditions and provide appropriate basic first aid.\n\n" +
-                "Your objectives: reach the scene, examine all five people, assign triage priorities, choose suitable supplies and complete the simulated aid steps.\n\n" +
-                "Controls: WASD to move, mouse to look, E to interact, Esc to pause.\n\n" +
-                "This is an educational simulation, not medical training or advice.",
-                new Vector2(880f, 620f));
-            UiFactory.Button(CurrentModal(), "BEGIN SCENARIO",
-                new Vector2(0f, -220f), new Vector2(290f, 58f), BeginSimulation);
+            if (player != null) player.SetControlsEnabled(false);
+            hud.SetVisible(false);
+            modal.Show("SCENE BRIEFING",
+                "A car has left the road and struck a barrier. Five people are injured or shaken. " +
+                "You are first on scene and emergency services are on the way.\n\n" +
+                "<b>Your task</b>\n" +
+                "1. Walk to the scene and find all five people.\n" +
+                "2. Examine each person (look at them and press <b>E</b>).\n" +
+                "3. Assign a triage priority: RED (immediate), YELLOW (delayed) or GREEN (minor).\n" +
+                "4. Open the first-aid kit, choose a suitable supply and complete the simulated aid step.\n\n" +
+                "The timer pauses while a panel is open. Accuracy matters far more than speed.\n\n" +
+                "<color=#CDD3D8><i>" + Disclaimer + "</i></color>",
+                new Vector2(900f, 560f), 100f, false);
+            UiFactory.Button(modal.Panel, "BEGIN SCENARIO", new Vector2(0f, modal.RowY(0)),
+                new Vector2(300f, 58f), BeginSimulation);
         }
 
-        private void BeginSimulation()
+        public void BeginSimulation()
         {
-            simulationStarted = true;
-            CloseModal();
+            if (HasStarted) return;
+            HasStarted = true;
+            modal.Close();
+            hud.SetVisible(true);
             if (gameManager != null) gameManager.StartScenario();
             if (player != null) player.SetControlsEnabled(true);
-            CompleteObjective(0);
-            UpdateObjectives();
+            hud.SetStatus("Walk toward the crash past the barriers ahead.");
+            RefreshHud();
         }
 
-        private void TryInteract()
+        /// <summary>Raycasts from the camera and interacts with a person or the kit in range.</summary>
+        public bool TryInteract()
         {
-            if (playerCamera == null || player == null || !player.enabled)
-            {
-                return;
-            }
-
-            Ray ray = new Ray(playerCamera.position, playerCamera.forward);
-            if (!Physics.Raycast(ray, out RaycastHit hit, 3.8f,
-                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-            {
-                SetStatus("Nothing within reach. Look at a person or the first-aid kit.");
-                return;
-            }
-
-            PatientActor patient = hit.collider.GetComponentInParent<PatientActor>();
-            if (patient != null)
+            if (playerCamera == null) return false;
+            object target = FindTarget();
+            if (target is PatientActor patient)
             {
                 if (audioManager != null) audioManager.PlayPatient();
                 OpenExamination(patient);
-                return;
+                return true;
             }
 
-            FirstAidKitInteractable kit = hit.collider.GetComponentInParent<FirstAidKitInteractable>();
-            if (kit != null)
+            if (target is FirstAidKitInteractable kit)
             {
-                if (patients.Exists(item => !item.HasBeenTriaged))
-                {
-                    SetStatus("Examine and assign a triage priority to each person first.");
-                    return;
-                }
-
-                kit.Open();
-                if (audioManager != null) audioManager.PlayKitOpen();
-                OpenInventory();
-                return;
+                return OpenKit(kit);
             }
 
-            SetStatus("Look directly at a person or the first-aid kit and press E.");
+            hud.SetStatus("Nothing in reach. Look directly at a person or the first-aid kit.");
+            return false;
         }
 
-        private void OpenExamination(PatientActor patient)
+        private object FindTarget()
         {
-            if (patient.MarkExamined() && scoreManager != null)
+            Ray ray = new Ray(playerCamera.position, playerCamera.forward);
+            if (!Physics.Raycast(ray, out RaycastHit hit, InteractionRange,
+                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
             {
-                scoreManager.MarkExamined();
+                return null;
             }
-            UpdateObjectives();
-            ShowModal("PATIENT EXAMINATION",
-                "PATIENT " + patient.Data.patientId + "  |  " + patient.Data.patientName +
-                "  |  Age " + patient.Data.age + "\n\n" +
-                "Visible injury: " + patient.Data.injuryDescription + "\n\n" +
-                "Reported symptoms: " + patient.Data.symptoms + "\n\n" +
-                "Responsiveness: " + patient.Data.responsiveness + "\n" +
-                "Breathing: " + (patient.Data.breathing ? "Present" : "Not observed") + "\n" +
-                "Visible severe bleeding: " + (patient.Data.severeBleeding ? "Yes" : "No") + "\n" +
-                "Can walk: " + (patient.Data.canWalk ? "Yes" : "No") +
-                "\n\nChoose a triage category. Your choice is not revealed until after you decide.",
-                new Vector2(880f, 700f));
 
-            Transform panel = CurrentModal();
-            UiFactory.Button(panel, "RED  |  IMMEDIATE", new Vector2(-270f, -220f),
-                new Vector2(250f, 58f), () => AssignTriage(patient, TriageCategory.Red), Red);
-            UiFactory.Button(panel, "YELLOW  |  DELAYED", new Vector2(0f, -220f),
-                new Vector2(250f, 58f), () => AssignTriage(patient, TriageCategory.Yellow), Yellow);
-            UiFactory.Button(panel, "GREEN  |  MINOR", new Vector2(270f, -220f),
-                new Vector2(250f, 58f), () => AssignTriage(patient, TriageCategory.Green), Green);
-            UiFactory.Button(panel, "CLOSE", new Vector2(0f, -292f),
-                new Vector2(180f, 44f), ResumeSimulation, Muted);
+            PatientActor patient = hit.collider.GetComponentInParent<PatientActor>();
+            if (patient != null) return patient;
+            return hit.collider.GetComponentInParent<FirstAidKitInteractable>();
         }
 
-        private void AssignTriage(PatientActor patient, TriageCategory category)
+        private void UpdatePrompt()
+        {
+            object target = playerCamera != null ? FindTarget() : null;
+            if (target is PatientActor patient)
+            {
+                hud.SetPrompt("[E]  Examine " + patient.Data.patientName);
+            }
+            else if (target is FirstAidKitInteractable)
+            {
+                hud.SetPrompt("[E]  Open first-aid kit");
+            }
+            else
+            {
+                hud.SetPrompt(string.Empty);
+            }
+        }
+
+        public void OpenExamination(PatientActor patient)
+        {
+            if (patient.MarkExamined() && scoreManager != null) scoreManager.MarkExamined();
+            UpdateObjectives();
+            PatientData data = patient.Data;
+            string previous = patient.HasBeenTriaged
+                ? "\n<color=#F6D171>Previously assigned: " + Palette.Label(patient.AssignedCategory) +
+                  ". Reassess and choose again if needed.</color>"
+                : string.Empty;
+            OpenModal("PATIENT EXAMINATION  |  " + data.patientId,
+                "<b>" + data.patientName + "</b>, age " + data.age + "\n\n" +
+                "<b>Visible injury:</b> " + data.injuryDescription + "\n" +
+                "<b>Reported / observed:</b> " + data.symptoms + "\n\n" +
+                "<b>Walking:</b> " + (data.canWalk ? "Able to walk" : "Unable to walk") + "\n" +
+                "<b>Breathing:</b> " + (data.breathing ? "Breathing observed" : "No breathing observed") + "\n" +
+                "<b>Responsiveness:</b> " + data.responsiveness + "\n" +
+                "<b>Bleeding:</b> " + (data.severeBleeding ? "Severe, visible bleeding" : "No severe bleeding seen") + "\n" +
+                previous + "\n\nChoose a triage priority for this person:",
+                new Vector2(920f, 620f), 180f, true);
+            Transform panel = modal.Panel;
+            float y = modal.RowY(1);
+            UiFactory.Button(panel, "RED  |  IMMEDIATE", new Vector2(-285f, y), new Vector2(265f, 58f),
+                () => AssignTriage(patient, TriageCategory.Red), Palette.TriageRed);
+            UiFactory.Button(panel, "YELLOW  |  DELAYED", new Vector2(0f, y), new Vector2(265f, 58f),
+                () => AssignTriage(patient, TriageCategory.Yellow), Palette.TriageYellow);
+            UiFactory.Button(panel, "GREEN  |  MINOR", new Vector2(285f, y), new Vector2(265f, 58f),
+                () => AssignTriage(patient, TriageCategory.Green), Palette.TriageGreen);
+            UiFactory.Button(panel, "CLOSE", new Vector2(0f, modal.RowY(0)), new Vector2(200f, 48f),
+                ResumeSimulation, Palette.Slate);
+        }
+
+        public void AssignTriage(PatientActor patient, TriageCategory category)
         {
             bool previouslyTriaged = patient.HasBeenTriaged;
             bool previousCorrect = patient.LastTriageWasCorrect;
             patient.SetTriage(category);
-            if (scoreManager != null)
-            {
-                scoreManager.SetTriageResult(previouslyTriaged, previousCorrect,
-                    patient.LastTriageWasCorrect);
-            }
+            bool correct = patient.LastTriageWasCorrect;
+            if (scoreManager != null) scoreManager.SetTriageResult(previouslyTriaged, previousCorrect, correct);
 
-            StringBuilder result = new StringBuilder();
-            result.Append("Assigned triage: ").Append(CategoryLabel(category)).Append("\n\n");
-            result.Append(patient.LastTriageWasCorrect
-                ? "This matches the simplified scenario key."
-                : "This does not match the simplified scenario key.");
-            result.Append("\n\nReasoning: ").Append(patient.Data.reasoning);
-            result.Append("\n\nYou may reassess this person at any time.");
-            ShowModal("TRIAGE FEEDBACK", result.ToString(), new Vector2(760f, 500f));
-            Transform panel = CurrentModal();
-            UiFactory.Button(panel, "REASSESS", new Vector2(-130f, -180f),
-                new Vector2(220f, 52f), () => OpenExamination(patient), Muted);
-            UiFactory.Button(panel, "CONTINUE", new Vector2(130f, -180f),
-                new Vector2(220f, 52f), ResumeSimulation);
+            StringBuilder text = new StringBuilder();
+            text.Append("You assigned: <b>").Append(Palette.Label(category)).Append("</b>\n");
+            text.Append("Scenario key: <b>").Append(Palette.Label(patient.Data.correctTriage)).Append("</b>\n\n");
+            text.Append(correct
+                ? "<color=#7FE0A6><b>Correct.</b> +" + ScoreManager.CorrectTriagePoints + " points.</color>"
+                : "<color=#FF8A8A><b>Not the expected priority.</b> -" + ScoreManager.WrongTriagePenalty +
+                  " points. You can reassess this person.</color>");
+            text.Append("\n\n<b>Why:</b> ").Append(patient.Data.reasoning);
+            text.Append("\n\n<size=85%><color=#CDD3D8>Simplified START-style rule used in this game: " +
+                        "able to walk = GREEN; not breathing, severe bleeding or unresponsive = RED; " +
+                        "otherwise YELLOW.</color></size>");
+            OpenModal("TRIAGE FEEDBACK  |  " + patient.Data.patientId, text.ToString(),
+                new Vector2(860f, 520f), 100f, true);
+            UiFactory.Button(modal.Panel, "REASSESS", new Vector2(-140f, modal.RowY(0)),
+                new Vector2(240f, 54f), () => OpenExamination(patient), Palette.Slate);
+            UiFactory.Button(modal.Panel, "CONTINUE", new Vector2(140f, modal.RowY(0)),
+                new Vector2(240f, 54f), ResumeSimulation);
             UpdateObjectives();
         }
 
-        private void OpenInventory()
+        public bool OpenKit(FirstAidKitInteractable kit)
         {
-            List<PatientActor> available = patients.FindAll(item =>
-                item.HasBeenTriaged && !item.HasReceivedAid);
-            ShowModal("FIRST-AID KIT  |  EDUCATIONAL SIMULATION",
-                "Choose a triaged person, then select a basic supply for the described scenario action.\n" +
-                "A mismatched item receives feedback but no aid credit. These simplified actions are not medical instructions.",
-                new Vector2(940f, 660f));
-            Transform panel = CurrentModal();
-
-            if (available.Count == 0)
+            if (!patients.Exists(item => item.HasBeenTriaged))
             {
-                UiFactory.Text(panel, "All simulated aid steps are complete.",
-                    20, new Vector2(760f, 80f), new Vector2(0f, -30f),
-                    TextAlignmentOptions.Center);
-            }
-            else
-            {
-                float y = 110f;
-                foreach (PatientActor actor in available)
-                {
-                    PatientActor current = actor;
-                    UiFactory.Button(panel,
-                        current.Data.patientId + "  |  " + current.Data.patientName +
-                        "  |  " + CategoryLabel(current.AssignedCategory),
-                        new Vector2(0f, y), new Vector2(690f, 52f),
-                        () => ShowSupplyChoices(current), Muted);
-                    y -= 62f;
-                }
+                hud.SetStatus("Examine and triage at least one person before using the kit.");
+                return false;
             }
 
-            UiFactory.Button(panel, "CLOSE KIT", new Vector2(0f, -282f),
-                new Vector2(220f, 48f), ResumeSimulation, Muted);
+            if (!kit.IsOpen && audioManager != null) audioManager.PlayKitOpen();
+            kit.Open();
+            ShowInventory();
+            return true;
         }
 
-        private void ShowSupplyChoices(PatientActor patient)
+        private void ShowInventory()
         {
-            inventoryPatient = patient;
-            ShowModal("SELECT A SUPPLY  |  " + patient.Data.patientId,
-                "Scenario note: " + patient.Data.aidAction +
-                "\n\nSelect one item. Correct actions are educational feedback only.",
-                new Vector2(940f, 660f));
-            Transform panel = CurrentModal();
+            List<PatientActor> waiting = patients.FindAll(item => item.HasBeenTriaged && !item.HasReceivedAid);
+            waiting.Sort((a, b) => Priority(a.AssignedCategory).CompareTo(Priority(b.AssignedCategory)));
+            int untriaged = patients.FindAll(item => !item.HasBeenTriaged).Count;
+            OpenModal("FIRST-AID KIT  |  EDUCATIONAL SIMULATION",
+                "Choose a triaged person (highest priority listed first), then select one supply. " +
+                "A mismatched item gives feedback but no credit.\n" +
+                (untriaged > 0 ? "<color=#F6D171>" + untriaged + " person(s) still need triage.</color>" : string.Empty),
+                new Vector2(940f, 680f), 470f, true);
+            Transform panel = modal.Panel;
+            if (waiting.Count == 0)
+            {
+                UiFactory.Text(panel, "No triaged person is waiting for aid.", 22,
+                    new Vector2(760f, 60f), new Vector2(0f, 40f), TextAlignmentOptions.Center);
+            }
+
+            float y = 130f;
+            foreach (PatientActor actor in waiting)
+            {
+                PatientActor current = actor;
+                UiFactory.Button(panel, current.Data.patientId + "  |  " + current.Data.patientName +
+                                        "  |  " + Palette.Label(current.AssignedCategory),
+                    new Vector2(0f, y), new Vector2(720f, 54f), () => ShowSupplyChoices(current),
+                    Palette.ForCategory(current.AssignedCategory));
+                y -= 64f;
+            }
+
+            UiFactory.Button(panel, "CLOSE KIT", new Vector2(0f, modal.RowY(0)), new Vector2(240f, 50f),
+                ResumeSimulation, Palette.Slate);
+        }
+
+        private void ShowSupplyChoices(PatientActor patient, string feedback = null)
+        {
+            OpenModal("SELECT A SUPPLY  |  " + patient.Data.patientId + "  " + patient.Data.patientName,
+                "<b>Injury:</b> " + patient.Data.injuryDescription + "\n" +
+                "Select the item that best fits this person's simulated aid step." +
+                (feedback != null ? "\n<color=#F6D171>" + feedback + "</color>" : string.Empty),
+                new Vector2(980f, 660f), 500f, true);
+            Transform panel = modal.Panel;
             for (int i = 0; i < supplies.Count; i++)
             {
                 SupplyData supply = supplies[i];
-                float x = i % 2 == 0 ? -220f : 220f;
-                float y = 100f - (i / 2) * 112f;
-                string text = supply.displayName + "\n" + supply.educationalPurpose;
-                UiFactory.Button(panel, text, new Vector2(x, y), new Vector2(390f, 88f),
-                    () => ApplySupply(patient, supply), supply.displayColor);
+                float x = i % 2 == 0 ? -230f : 230f;
+                if (i == supplies.Count - 1 && supplies.Count % 2 == 1) x = 0f;
+                float y = 120f - (i / 2) * 104f;
+                UiFactory.Button(panel, supply.displayName + "\n<size=70%>" + supply.description + "</size>",
+                    new Vector2(x, y), new Vector2(430f, 90f), () => ApplySupply(patient, supply),
+                    supply.displayColor);
             }
 
-            UiFactory.Button(panel, "BACK TO PATIENTS", new Vector2(0f, -282f),
-                new Vector2(260f, 48f), OpenInventory, Muted);
+            UiFactory.Button(panel, "BACK", new Vector2(0f, modal.RowY(0)), new Vector2(220f, 50f),
+                ShowInventory, Palette.Slate);
         }
 
-        private void ApplySupply(PatientActor patient, SupplyData supply)
+        /// <summary>Applies a supply. Returns true when it matched the scenario's recommended item.</summary>
+        public bool ApplySupply(PatientActor patient, SupplyData supply)
         {
+            if (patient.HasReceivedAid) return false;
             if (patient.Data.recommendedSupply != supply)
             {
-                SetStatus("Not the scenario's recommended item. No aid credit awarded; you may try again.");
-                ShowSupplyChoices(patient);
-                UiFactory.Text(CurrentModal(),
-                    "That item does not match this scenario action. No reward was awarded.",
-                    18, new Vector2(760f, 42f), new Vector2(0f, -235f),
-                    TextAlignmentOptions.Center, Yellow);
-                return;
+                if (scoreManager != null) scoreManager.RecordWrongSupply();
+                ShowSupplyChoices(patient, supply.displayName + " does not fit this scenario step. No credit (-" +
+                                           ScoreManager.WrongSupplyPenalty + "). Try another item.");
+                return false;
             }
 
             patient.MarkAidCompleted();
             if (scoreManager != null) scoreManager.MarkTreatmentCompleted();
-            ShowModal("SIMULATED AID COMPLETE",
-                "Selected item: " + supply.displayName + "\n\n" +
-                "Scenario action: " + patient.Data.aidAction +
-                "\n\nThis simplified activity is not a real-world treatment instruction.",
-                new Vector2(760f, 470f));
-            UiFactory.Button(CurrentModal(), "CONTINUE",
-                new Vector2(0f, -165f), new Vector2(240f, 52f), ResumeSimulation);
+            objectives.Set(ObjectiveTracker.SelectSupply, true);
+            OpenModal("SIMULATED AID COMPLETE  |  " + patient.Data.patientId,
+                "<b>Item:</b> " + supply.displayName + "  (+" + ScoreManager.AidPoints + " points)\n\n" +
+                "<b>Simulated step:</b> " + patient.Data.aidAction + "\n\n" +
+                "<b>Why this item:</b> " + supply.educationalPurpose + "\n\n" +
+                "<color=#CDD3D8><i>This simplified activity is not a real-world treatment instruction.</i></color>",
+                new Vector2(860f, 500f), 100f, true);
+            UiFactory.Button(modal.Panel, "CONTINUE", new Vector2(0f, modal.RowY(0)), new Vector2(260f, 54f),
+                ResumeSimulation);
             UpdateObjectives();
+            return true;
         }
 
         private void ShowPauseMenu()
         {
-            if (gameManager != null) gameManager.PauseScenario();
-            if (player != null) player.SetControlsEnabled(false);
-            ShowModal("PAUSED", "The scenario timer is paused.", new Vector2(570f, 440f));
-            Transform panel = CurrentModal();
-            UiFactory.Button(panel, "RESUME", new Vector2(0f, 85f),
-                new Vector2(280f, 56f), ResumeSimulation);
-            UiFactory.Button(panel, "RESTART", new Vector2(0f, 5f),
-                new Vector2(280f, 56f), RestartScenario, Muted);
-            UiFactory.Button(panel, "MAIN MENU", new Vector2(0f, -75f),
-                new Vector2(280f, 56f), ReturnToMenu, Muted);
+            paused = true;
+            OpenModal("PAUSED", "The scenario timer is paused.\n\nMaster volume", new Vector2(600f, 560f), 330f, true);
+            Transform panel = modal.Panel;
+            UiFactory.VolumeSlider(panel, new Vector2(0f, 90f), new Vector2(420f, 34f));
+            UiFactory.Button(panel, "RESUME", new Vector2(0f, modal.RowY(2)), new Vector2(300f, 56f), ResumeSimulation);
+            UiFactory.Button(panel, "RESTART", new Vector2(0f, modal.RowY(1)), new Vector2(300f, 56f),
+                RestartScenario, Palette.Slate);
+            UiFactory.Button(panel, "MAIN MENU", new Vector2(0f, modal.RowY(0)), new Vector2(300f, 56f),
+                ReturnToMenu, Palette.Slate);
         }
 
-        private void ResumeSimulation()
+        public void ResumeSimulation()
         {
-            CloseModal();
+            paused = false;
+            modal.Close();
+            if (IsFinished) return;
             if (gameManager != null) gameManager.ResumeScenario();
             if (player != null) player.SetControlsEnabled(true);
-            UpdateObjectives();
+            RefreshHud();
+            if (patients.Count > 0 && patients.TrueForAll(item => item.HasReceivedAid)) FinishScenario();
         }
 
-        private void RestartScenario()
+        public void RestartScenario()
         {
             Time.timeScale = 1f;
             SceneManager.LoadScene(SceneManager.GetActiveScene().name);
         }
 
-        private void ReturnToMenu()
+        public void ReturnToMenu()
         {
             Time.timeScale = 1f;
             SceneManager.LoadScene(MainMenuScene);
         }
 
-        private void FinishScenario()
+        private void OpenModal(string title, string body, Vector2 size, float reservedBottom, bool closable)
         {
-            if (simulationFinished) return;
-            simulationFinished = true;
             if (player != null) player.SetControlsEnabled(false);
-            if (gameManager != null) gameManager.EndScenario();
-            int timeBonus = scoreManager != null
-                ? scoreManager.AddTimeBonus(gameManager != null ? gameManager.GetRemainingTime() : 0f)
-                : 0;
-            ShowModal("FINAL SCENARIO REPORT",
-                "TOTAL SCORE  " + (scoreManager != null ? scoreManager.score : 0) +
-                "  (includes +" + timeBonus + " time bonus)\n\n" +
-                "People examined: " + (scoreManager != null ? scoreManager.examinedPatients : 0) +
-                " / " + patients.Count + "\n" +
-                "Correct triage: " + (scoreManager != null ? scoreManager.correctClassifications : 0) +
-                "   |   Incorrect: " + (scoreManager != null ? scoreManager.incorrectClassifications : 0) +
-                "\nSimulated aid steps: " + (scoreManager != null ? scoreManager.completedTreatments : 0) +
-                " / " + patients.Count + "\nObjectives completed: " +
-                (scoreManager != null ? scoreManager.completedObjectives : 0) + " / 5\n\n" +
-                "Overall rating: " + GetRating(scoreManager != null ? scoreManager.score : 0) +
-                "\n\nThis is an educational simulation, not medical training or advice. It is not a substitute for emergency services or qualified professional guidance.",
-                new Vector2(900f, 700f));
-            Transform panel = CurrentModal();
-            UiFactory.Button(panel, "RESTART", new Vector2(-140f, -300f),
-                new Vector2(220f, 54f), RestartScenario, Muted);
-            UiFactory.Button(panel, "MAIN MENU", new Vector2(140f, -300f),
-                new Vector2(220f, 54f), ReturnToMenu);
+            if (gameManager != null && HasStarted && !IsFinished) gameManager.PauseScenario();
+            hud.SetPrompt(string.Empty);
+            modal.Show(title, body, size, reservedBottom, closable);
         }
+
+        public void FinishScenario()
+        {
+            if (IsFinished) return;
+            UpdateObjectives();
+            IsFinished = true;
+            paused = false;
+            if (gameManager != null) gameManager.EndScenario();
+            if (player != null) player.SetControlsEnabled(false);
+            float remaining = gameManager != null ? gameManager.GetRemainingTime() : 0f;
+            bool allAided = patients.TrueForAll(item => item.HasReceivedAid);
+            int timeBonus = scoreManager != null && allAided ? scoreManager.AddTimeBonus(remaining) : 0;
+            int score = scoreManager != null ? scoreManager.score : 0;
+            int maximum = ScoreManager.MaximumScore(patients.Count, objectives.Count);
+
+            StringBuilder report = new StringBuilder();
+            report.Append("<b>Total score: ").Append(score).Append(" / ").Append(maximum).Append("</b>   ");
+            report.Append("Rating: <b>").Append(Rating(score, maximum)).Append("</b>\n");
+            report.Append(allAided ? "All simulated aid completed with " + FormatTime(remaining) + " remaining."
+                                   : "<color=#F6D171>Time expired before every step was completed.</color>");
+            report.Append("\n\n");
+            if (scoreManager != null)
+            {
+                report.Append("Examined: ").Append(scoreManager.examinedPatients).Append("/").Append(patients.Count);
+                report.Append("    Correct triage: ").Append(scoreManager.correctClassifications).Append("/").Append(patients.Count);
+                report.Append("    Simulated aid: ").Append(scoreManager.completedTreatments).Append("/").Append(patients.Count);
+                report.Append("\nObjectives: ").Append(objectives.CompletedCount).Append("/").Append(objectives.Count);
+                report.Append("    Triage changes needed: ").Append(scoreManager.triageMistakes);
+                report.Append("    Wrong supplies: ").Append(scoreManager.supplyMistakes);
+                report.Append("    Time bonus: +").Append(timeBonus).Append(" (max ").Append(ScoreManager.MaxTimeBonus).Append(")\n\n");
+            }
+
+            foreach (PatientActor patient in patients)
+            {
+                string assigned = patient.HasBeenTriaged ? patient.AssignedCategory.ToString().ToUpperInvariant() : "NONE";
+                string mark = patient.HasBeenTriaged && patient.LastTriageWasCorrect
+                    ? "<color=#7FE0A6>correct</color>" : "<color=#FF8A8A>expected " +
+                      patient.Data.correctTriage.ToString().ToUpperInvariant() + "</color>";
+                report.Append(patient.Data.patientId).Append("  ").Append(patient.Data.patientName)
+                    .Append(":  ").Append(assigned).Append(" (").Append(mark).Append(")  |  aid ")
+                    .Append(patient.HasReceivedAid ? "done" : "not done").Append("\n");
+            }
+
+            report.Append("\n<size=85%><color=#CDD3D8><i>").Append(Disclaimer).Append("</i></color></size>");
+            FinalReport = report.ToString();
+            hud.SetVisible(false);
+            modal.Show("FINAL SCENARIO REPORT", FinalReport, new Vector2(1000f, 640f), 100f, false);
+            UiFactory.Button(modal.Panel, "RESTART", new Vector2(-150f, modal.RowY(0)), new Vector2(260f, 56f),
+                RestartScenario, Palette.Slate);
+            UiFactory.Button(modal.Panel, "MAIN MENU", new Vector2(150f, modal.RowY(0)), new Vector2(260f, 56f),
+                ReturnToMenu);
+            if (audioManager != null) audioManager.PlayObjective();
+            if (scoreManager != null) scoreManager.PrintSummary();
+        }
+
+        // ------------------------------------------------------------- helpers
 
         private void UpdateObjectives()
         {
-            bool allExamined = patients.Count > 0 && patients.TrueForAll(item => item.HasBeenExamined);
-            bool allTriaged = patients.Count > 0 && patients.TrueForAll(item => item.HasBeenTriaged);
-            bool allTreated = patients.Count > 0 && patients.TrueForAll(item => item.HasReceivedAid);
-            SetObjective(1, allExamined);
-            SetObjective(2, allTriaged);
-            SetObjective(3, allTreated);
-            SetObjective(4, allTreated);
-
-            if (objectivesText != null)
-            {
-                objectivesText.text =
-                    "<b>SCENE OBJECTIVES</b>\n" +
-                    ObjectiveLine(0, "Reach the accident scene") + "\n" +
-                    ObjectiveLine(1, "Examine every person") + "\n" +
-                    ObjectiveLine(2, "Assign triage to everyone") + "\n" +
-                    ObjectiveLine(3, "Select suitable supplies") + "\n" +
-                    ObjectiveLine(4, "Complete simulated aid");
-            }
-
-            if (allTreated && simulationStarted)
-            {
-                FinishScenario();
-            }
-
-            UpdateScoreDisplay();
+            objectives.Set(ObjectiveTracker.ExamineAll, patients.Count > 0 && patients.TrueForAll(p => p.HasBeenExamined));
+            objectives.Set(ObjectiveTracker.TriageAll, patients.Count > 0 && patients.TrueForAll(p => p.HasBeenTriaged));
+            objectives.Set(ObjectiveTracker.CompleteAid, patients.Count > 0 && patients.TrueForAll(p => p.HasReceivedAid));
+            RefreshHud();
         }
 
-        private void SetObjective(int index, bool complete)
+        private void OnObjectiveCompleted(int index)
         {
-            if (complete) CompleteObjective(index);
+            if (scoreManager != null) scoreManager.AwardObjective();
+            if (audioManager != null) audioManager.PlayObjective();
+            if (hud != null) hud.SetStatus("Objective complete! +" + ScoreManager.ObjectivePoints + " points.", 4f);
         }
 
-        private void CompleteObjective(int index)
+        private void RefreshHud()
         {
-            if (completedObjectives.Add(index))
-            {
-                if (scoreManager != null) scoreManager.AwardObjective();
-                if (audioManager != null) audioManager.PlayObjective();
-            }
+            if (hud == null) return;
+            hud.SetObjectives(objectives.Describe());
+            hud.SetScore(scoreManager != null ? scoreManager.score : 0,
+                gameManager != null ? gameManager.GetFormattedTime() : "--:--");
         }
 
-        private string ObjectiveLine(int index, string text)
+        private static int Priority(TriageCategory category)
         {
-            return (completedObjectives.Contains(index) ? "[x] " : "[ ] ") + text;
+            return category == TriageCategory.Red ? 0 : category == TriageCategory.Yellow ? 1 : 2;
         }
 
-        private void UpdateScoreDisplay()
+        private static string FormatTime(float seconds)
         {
-            if (scoreText == null) return;
-            scoreText.text = "SCORE  " + (scoreManager != null ? scoreManager.score : 0) +
-                             "\nTIME  " + (gameManager != null ? gameManager.GetFormattedTime() : "--:--");
+            return Mathf.FloorToInt(seconds / 60f).ToString("00") + ":" + Mathf.FloorToInt(seconds % 60f).ToString("00");
         }
 
-        private void UpdatePrompt()
+        private static string Rating(int score, int maximum)
         {
-            if (promptText == null || playerCamera == null || IsModalOpen())
-            {
-                if (promptText != null) promptText.text = string.Empty;
-                return;
-            }
-
-            Ray ray = new Ray(playerCamera.position, playerCamera.forward);
-            if (Physics.Raycast(ray, out RaycastHit hit, 3.8f,
-                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-            {
-                PatientActor patient = hit.collider.GetComponentInParent<PatientActor>();
-                if (patient != null)
-                {
-                    promptText.text = "Press E to examine " + patient.Data.patientName;
-                    return;
-                }
-
-                if (hit.collider.GetComponentInParent<FirstAidKitInteractable>() != null)
-                {
-                    promptText.text = "Press E to open the first-aid kit";
-                    return;
-                }
-            }
-
-            promptText.text = string.Empty;
-        }
-
-        private void SetStatus(string message)
-        {
-            if (statusText != null) statusText.text = message;
-            Debug.Log(message);
-        }
-
-        private void ShowModal(string title, string body, Vector2 size)
-        {
-            if (player != null) player.SetControlsEnabled(false);
-            if (gameManager != null && simulationStarted && !simulationFinished)
-            {
-                gameManager.PauseScenario();
-            }
-
-            CloseModal();
-            GameObject backdrop = UiFactory.Panel(canvas.transform, "Modal Backdrop",
-                Vector2.zero, Vector2.zero, new Color32(5, 9, 14, 175), true);
-            backdrop.transform.SetAsLastSibling();
-            GameObject panel = UiFactory.Panel(backdrop.transform, "Modal Panel",
-                size, Vector2.zero, Charcoal);
-            UiFactory.Text(panel.transform, title, 30, new Vector2(size.x - 70f, 60f),
-                new Vector2(0f, size.y * 0.5f - 54f), TextAlignmentOptions.Center,
-                new Color32(255, 255, 255, 255)).fontStyle = FontStyles.Bold;
-            TMP_Text bodyText = UiFactory.Text(panel.transform, body, 19,
-                new Vector2(size.x - 96f, size.y - 320f),
-                new Vector2(0f, 0f), TextAlignmentOptions.TopLeft);
-            bodyText.margin = new Vector4(12f, 5f, 12f, 5f);
-            if (canvas.transform.childCount > 0)
-            {
-                canvas.transform.SetAsLastSibling();
-            }
-
-        }
-
-        private Transform CurrentModal()
-        {
-            Transform backdrop = canvas.transform.Find("Modal Backdrop");
-            return backdrop != null ? backdrop.Find("Modal Panel") : canvas.transform;
-        }
-
-        private bool IsModalOpen()
-        {
-            return canvas != null && canvas.transform.Find("Modal Backdrop") != null;
-        }
-
-        private void CloseModal()
-        {
-            if (canvas == null) return;
-            Transform existing = canvas.transform.Find("Modal Backdrop");
-            if (existing != null) Destroy(existing.gameObject);
-        }
-
-        private static void SetRectAnchor(RectTransform rect, Vector2 anchorMin,
-            Vector2 anchorMax, Vector2 position)
-        {
-            rect.anchorMin = anchorMin;
-            rect.anchorMax = anchorMax;
-            rect.pivot = new Vector2(anchorMin.x == 1f ? 1f : 0f,
-                anchorMin.y == 1f ? 1f : 0f);
-            rect.anchoredPosition = position;
-        }
-
-        private static string CategoryLabel(TriageCategory category)
-        {
-            switch (category)
-            {
-                case TriageCategory.Red: return "RED | IMMEDIATE";
-                case TriageCategory.Yellow: return "YELLOW | DELAYED";
-                case TriageCategory.Green: return "GREEN | MINOR";
-                default: return category.ToString().ToUpperInvariant();
-            }
-        }
-
-        private static string GetRating(int value)
-        {
-            if (value >= 650) return "Excellent prioritisation";
-            if (value >= 400) return "Strong assessment";
-            if (value >= 200) return "Developing";
-            return "Keep practicing the scenario";
-        }
-
-        private static Material MakeMaterial(Color color, float metallic = 0f)
-        {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null) shader = Shader.Find("Standard");
-            Material material = new Material(shader);
-            material.color = color;
-            if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", metallic);
-            return material;
-        }
-
-        private static GameObject CreateBox(Transform parent, string name, Vector3 position,
-            Vector3 scale, Material material)
-        {
-            GameObject box = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            box.name = name;
-            box.transform.SetParent(parent, false);
-            box.transform.localPosition = position;
-            box.transform.localScale = scale;
-            box.GetComponent<Renderer>().sharedMaterial = material;
-            return box;
-        }
-
-        private static GameObject CreatePrimitive(Transform parent, string name,
-            PrimitiveType type, Vector3 position, Vector3 scale, Material material)
-        {
-            GameObject item = GameObject.CreatePrimitive(type);
-            item.name = name;
-            item.transform.SetParent(parent, false);
-            item.transform.localPosition = position;
-            item.transform.localScale = scale;
-            item.GetComponent<Renderer>().sharedMaterial = material;
-            return item;
+            float ratio = maximum > 0 ? (float)score / maximum : 0f;
+            if (ratio >= 0.9f) return "Excellent prioritisation";
+            if (ratio >= 0.75f) return "Strong assessment";
+            if (ratio >= 0.5f) return "Developing";
+            return "Keep practising";
         }
 
         private static Transform FindChild(Transform parent, string childName)
         {
-            if (parent.name.Contains(childName)) return parent;
+            if (parent.name == childName) return parent;
             for (int i = 0; i < parent.childCount; i++)
             {
                 Transform result = FindChild(parent.GetChild(i), childName);
