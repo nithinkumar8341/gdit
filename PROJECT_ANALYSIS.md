@@ -44,8 +44,6 @@
 
 Design decisions and implementation must keep all medical content explicitly educational and non-clinical.
 
-## Verification state
+## Verification state (original analysis — superseded)
 
-- Blender background smoke test passed: Blender imported `bpy`, reported version `5.2.0`, and exited with code `0`.
-- Unity was invoked in batch mode, but the run did not reach project compilation. Two Unity processes were already open for this project; the batch invocation exited early. No process was terminated. Compilation/build validation remains unverified until the Editor is closed.
-- The workspace does not currently have a `.git` directory, so phase commits are not yet possible.
+The statements in this document describe the project **before** implementation. At that time Unity was open, so batch compilation could not run, and no Git repository existed. Both have since been resolved. For current status see `DEV_LOG.md`, and for verification evidence see `TESTING_REPORT.md` and `Docs/TestEvidence/`.

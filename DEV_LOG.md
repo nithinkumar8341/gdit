@@ -1,4 +1,17 @@
 # Development Log
 
-- Phase 1 (baseline): inspected project scripts, scenes, packages, and UI; confirmed Blender background scripting. Unity batch compilation is blocked because Unity is still open; see `PROJECT_ANALYSIS.md`.
-- Phase 2 (structure): created `Assets/GoldenHour/` and its requested subfolders. Preserved all original assets; template cleanup and Unity validation are deferred until the Editor is closed.
+- **Phase 1 (baseline):** Inspected project scripts, scenes, packages and UI. Confirmed Blender background scripting. Unity batch compilation was initially blocked because the Editor was open; see `PROJECT_ANALYSIS.md`.
+- **Phase 2 (structure):** Created `Assets/GoldenHour/` and its subfolders. Preserved all original assets.
+- **Phase 3–5 (player, environment, patients, triage — first pass):** Added `FirstPersonPlayer`, `GameplayController`, `PatientData`/`PatientActor`, `TriageEvaluator`, UI factory and menu controller. The builder did not compile: missing `UnityEditor.Build` using, and `DestroyNamedObject` called where the helper was named `DeleteNamedObject`.
+- **Phase 6 (Blender assets):** The first export placed meshes along Blender's Y axis as if it were "up", so the models came out scrambled. `generate_assets.py` now maps (x, up, depth) into Blender's Z-up space. Regenerated `LowPolyMannequin`, `FirstAidKit` (with `KitHinge` lid pivot), `RoadBarrier`, `SupplyBundles`, `AccidentProps` (traffic cone) and a new `DamagedCar`. Blender exited 0 and printed `GOLDEN_HOUR_BLENDER_ASSETS_OK`.
+- **Phase 7 (compile fix and refactor):** Fixed both compile errors. Batch compile: 0 errors, 0 warnings. Split the 860-line controller into `ModalWindow`, `GameplayHud`, `ObjectiveTracker`, `AccidentEnvironment`, `MaterialFactory`, `Palette` and `PatientBillboard`. Fixed bugs:
+  - Modal replacement in the same frame attached buttons to a panel pending destruction.
+  - The supply screen revealed the correct item.
+  - P01 data (`canWalk=false`, expected GREEN) contradicted the rule.
+  - A patient spawned inside the car.
+  - Reassessment never corrected the score.
+  - Runtime `Shader.Find` could be stripped from builds; a serialized URP material template replaces it.
+- **Phase 8 (kit, scoring, menu, results):** State-based scoring (+100 / +75 / +25, −15 / −10, time bonus capped at 50). Pause menu with volume, Restart and Main Menu. Final report with rating, per-person results and disclaimer. The menu scene got a camera and AudioListener.
+- **Phase 9 (builder run):** `GoldenHour/Build Project` created the MainMenu scene, 5 PatientData and 5 SupplyData assets and `GH_RuntimeBase.mat`. It configured Build Settings (MainMenu, Samplespace), rewired the gameplay scene and deleted `Assets/TutorialInfo` and `Assets/Readme.asset`. Validation passed.
+- **Phase 10 (test):** Added `AutomatedPlaytest` (`-goldenhour-autotest`). Screenshots exposed a kit lid that opened downward and then toward the player. The hinge axis is now derived from the lid geometry and the kit is rotated so it opens away from the player. Tightened panel sizes. Final run: 65/65 checks passed, 0 exceptions in the player log.
+- **Phase 11 (build and docs):** `GoldenHour/Build Windows Player` succeeded: `Builds/GoldenHour/GoldenHour.exe`, 111,357,687 bytes reported. The 3 warnings are TextMesh Pro shader pragma deprecations from the package. Wrote `README.md` and `TESTING_REPORT.md`, and copied the evidence to `Docs/TestEvidence/`.

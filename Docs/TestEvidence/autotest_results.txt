@@ -1,0 +1,81 @@
+Golden Hour automated playtest | 2026-11-07 03:19:18Z | 1600x900 | Unity 6000.6.2f1
+PASS  Main menu scene loads first  [MainMenu]
+PASS  Main menu uses the Input System UI module
+  screenshot 01_main_menu.png
+PASS  How to Play view opens
+PASS  How to Play shows the educational disclaimer
+  screenshot 02_how_to_play.png
+PASS  Settings view has a volume slider
+PASS  Volume slider changes AudioListener.volume  [0.35]
+  screenshot 03_settings.png
+PASS  Start loads the gameplay scene  [Samplespace]
+PASS  Existing Player, GameManager and ScoreManager are present
+PASS  Five patients spawned  [5]
+PASS  First-aid kit spawned
+PASS  Briefing shown before play  [SCENE BRIEFING]
+PASS  Briefing has the disclaimer
+PASS  Procedural roadside ambience is playing
+  screenshot 04_briefing.png
+PASS  Timer runs after briefing
+PASS  Cursor locked while exploring
+PASS  Player rests on the ground (gravity/collision)  [(0.00, 0.08, -17.00)]
+  screenshot 05_scene_start.png
+PASS  W key moves the player forward  [moved 4.21 m]
+PASS  Esc opens the pause menu and pauses the timer  [PAUSED]
+PASS  Cursor unlocked while paused
+PASS  Timer does not advance while paused
+  screenshot 06_pause_menu.png
+PASS  Esc again resumes
+PASS  Kit refuses use before any triage
+PASS  Reach-scene objective completes past the barriers
+PASS  Raycast + E examines P01  [PATIENT EXAMINATION  |  P01]
+PASS  P01 examination hides the expected triage
+PASS  P01 data matches START-style rule
+PASS  P01 triage feedback shown
+PASS  Raycast + E examines P02  [PATIENT EXAMINATION  |  P02]
+PASS  P02 examination hides the expected triage
+PASS  P02 data matches START-style rule
+  screenshot 07_examination.png
+PASS  P02 triage feedback shown
+PASS  Raycast + E examines P03  [PATIENT EXAMINATION  |  P03]
+PASS  P03 examination hides the expected triage
+PASS  P03 data matches START-style rule
+PASS  P03 triage feedback shown
+PASS  Raycast + E examines P04  [PATIENT EXAMINATION  |  P04]
+PASS  P04 examination hides the expected triage
+PASS  P04 data matches START-style rule
+PASS  Wrong triage gives feedback without credit
+  screenshot 08_wrong_triage_feedback.png
+PASS  Reassessment reopens the examination
+PASS  P04 triage feedback shown
+PASS  Raycast + E examines P05  [PATIENT EXAMINATION  |  P05]
+PASS  P05 examination hides the expected triage
+PASS  P05 data matches START-style rule
+PASS  P05 triage feedback shown
+PASS  Examine-all and triage-all objectives complete
+PASS  Score counts five correct triage decisions  [5 correct]
+  screenshot 09_triaged_scene.png
+PASS  Raycast + E opens the first-aid kit inventory  [FIRST-AID KIT  |  EDUCATIONAL SIMULATION]
+PASS  Kit lid animates open
+  screenshot 10_kit_inventory.png
+  screenshot 11_kit_lid_open.png
+PASS  Wrong supply gives feedback and no reward
+  screenshot 12_wrong_supply.png
+PASS  P01 simulated aid with Emergency Blanket
+PASS  P02 simulated aid with Trauma Dressing
+PASS  P03 simulated aid with Disposable Gloves
+PASS  P04 simulated aid with Triangular Bandage
+PASS  P05 simulated aid with Sterile Gauze Pads
+  screenshot 13_aid_complete.png
+PASS  Scenario finishes after all aid
+PASS  All five objectives complete  [5/5]
+PASS  Final score is consistent  [score 1024, expected 1024, time bonus 49]
+PASS  Time bonus capped and below one correct triage
+PASS  Final report includes the disclaimer and rating
+PASS  Timer stopped at the end
+  screenshot 14_final_report.png
+PASS  Restart reloads a fresh scenario
+PASS  Score resets on restart
+PASS  Main Menu button returns to the menu
+PASS  Cursor visible in menu
+RESULT: ALL CHECKS PASSED

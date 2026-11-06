@@ -2,6 +2,7 @@ using UnityEngine;
 
 namespace GoldenHour
 {
+    /// <summary>Looping roadside ambience plus one-shot UI, kit, objective and patient sounds.</summary>
     public sealed class GoldenHourAudio : MonoBehaviour
     {
         public AudioClip ambience;
@@ -13,6 +14,8 @@ namespace GoldenHour
         private AudioSource musicSource;
         private AudioSource effectsSource;
 
+        public bool AmbiencePlaying => musicSource != null && musicSource.isPlaying;
+
         private void Awake()
         {
             musicSource = gameObject.AddComponent<AudioSource>();
@@ -20,7 +23,7 @@ namespace GoldenHour
             musicSource.playOnAwake = false;
             effectsSource = gameObject.AddComponent<AudioSource>();
             effectsSource.playOnAwake = false;
-            AudioListener.volume = PlayerPrefs.GetFloat("GoldenHour.Volume", 0.8f);
+            AudioListener.volume = PlayerPrefs.GetFloat(UiFactory.VolumePrefKey, 0.8f);
 
             if (ambience != null)
             {

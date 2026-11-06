@@ -107,6 +107,8 @@ namespace GoldenHour
             Check("First-aid kit spawned", game.Kit != null);
             Check("Briefing shown before play", game.Modal.Title == "SCENE BRIEFING", game.Modal.Title);
             Check("Briefing has the disclaimer", ScreenTextContains("not medical training"));
+            GoldenHourAudio gameAudio = FindAnyObjectByType<GoldenHourAudio>();
+            Check("Procedural roadside ambience is playing", gameAudio != null && gameAudio.AmbiencePlaying);
             yield return Screenshot("04_briefing");
             if (manager == null || score == null || player == null || game.Patients.Count != 5) yield break;
 
