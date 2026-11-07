@@ -1,46 +1,72 @@
-Golden Hour automated playtest | 2026-11-07 03:19:18Z | 1600x900 | Unity 6000.6.2f1
+Golden Hour automated playtest | 2026-11-07 11:17:59Z | 1600x900 | Unity 6000.6.2f1
 PASS  Main menu scene loads first  [MainMenu]
 PASS  Main menu uses the Input System UI module
+PASS  Menu fades in from black  [0.00]
+PASS  Buttons react to hover (grow) and press (shrink)  [hover 1.050, press 0.950]
   screenshot 01_main_menu.png
 PASS  How to Play view opens
 PASS  How to Play shows the educational disclaimer
   screenshot 02_how_to_play.png
-PASS  Settings view has a volume slider
+PASS  Settings view has volume and mouse sensitivity sliders
 PASS  Volume slider changes AudioListener.volume  [0.35]
+PASS  Sensitivity slider saves the setting  [1.70]
+PASS  Difficulty option switches to Easy
   screenshot 03_settings.png
+PASS  Start fades out before loading  [0.03]
 PASS  Start loads the gameplay scene  [Samplespace]
+PASS  Gameplay fades in
 PASS  Existing Player, GameManager and ScoreManager are present
 PASS  Five patients spawned  [5]
 PASS  First-aid kit spawned
 PASS  Briefing shown before play  [SCENE BRIEFING]
 PASS  Briefing has the disclaimer
 PASS  Procedural roadside ambience is playing
+PASS  Difficulty carried into the scenario
   screenshot 04_briefing.png
+PASS  All UI canvases are Screen Space - Overlay (drawn over the 3D world)
+PASS  Light fog enabled
+PASS  Warm low sun with soft shadows  [(24, 322, 0)]
+PASS  Camera renders URP post-processing
+PASS  Post-processing profile has bloom, vignette and colour grading
+PASS  Smoke particles are emitting from the damaged vehicle  [37 particles]
+PASS  Roadside detail present (skid marks, fences, signs, grass)
+PASS  Hazard lights flash on the damaged vehicle  [4 lamps]
 PASS  Timer runs after briefing
 PASS  Cursor locked while exploring
-PASS  Player rests on the ground (gravity/collision)  [(0.00, 0.08, -17.00)]
+PASS  Player rests on the ground (gravity/collision)  [(0.00, 0.07, -13.50)]
+PASS  Tutorial hint shown at the start
+PASS  Compass arrow points to the nearest unexamined person  [Next person  P01   12 m | arrow 22 deg, expected 22]
+PASS  All five patient beacons visible from the start position  [5/5 visible]
+PASS  Player starts close to the accident  [start z -13.5, nearest patient 11.8 m]
   screenshot 05_scene_start.png
-PASS  W key moves the player forward  [moved 4.21 m]
+PASS  W key moves the player forward  [moved 4.20 m]
+PASS  Footstep sounds play while walking  [2 steps]
 PASS  Esc opens the pause menu and pauses the timer  [PAUSED]
+PASS  Pause menu has volume and mouse sensitivity sliders
 PASS  Cursor unlocked while paused
 PASS  Timer does not advance while paused
   screenshot 06_pause_menu.png
 PASS  Esc again resumes
 PASS  Kit refuses use before any triage
 PASS  Reach-scene objective completes past the barriers
+PASS  P01 beacon pulses before examination
 PASS  Raycast + E examines P01  [PATIENT EXAMINATION  |  P01]
 PASS  P01 examination hides the expected triage
 PASS  P01 data matches START-style rule
 PASS  P01 triage feedback shown
+PASS  P02 beacon pulses before examination
 PASS  Raycast + E examines P02  [PATIENT EXAMINATION  |  P02]
 PASS  P02 examination hides the expected triage
 PASS  P02 data matches START-style rule
+PASS  Easy difficulty shows what to look for
   screenshot 07_examination.png
 PASS  P02 triage feedback shown
+PASS  P03 beacon pulses before examination
 PASS  Raycast + E examines P03  [PATIENT EXAMINATION  |  P03]
 PASS  P03 examination hides the expected triage
 PASS  P03 data matches START-style rule
 PASS  P03 triage feedback shown
+PASS  P04 beacon pulses before examination
 PASS  Raycast + E examines P04  [PATIENT EXAMINATION  |  P04]
 PASS  P04 examination hides the expected triage
 PASS  P04 data matches START-style rule
@@ -48,12 +74,15 @@ PASS  Wrong triage gives feedback without credit
   screenshot 08_wrong_triage_feedback.png
 PASS  Reassessment reopens the examination
 PASS  P04 triage feedback shown
+PASS  P05 beacon pulses before examination
 PASS  Raycast + E examines P05  [PATIENT EXAMINATION  |  P05]
 PASS  P05 examination hides the expected triage
 PASS  P05 data matches START-style rule
 PASS  P05 triage feedback shown
 PASS  Examine-all and triage-all objectives complete
 PASS  Score counts five correct triage decisions  [5 correct]
+PASS  Beacons take the assigned triage colour
+PASS  Compass arrow points to the kit  [First-aid kit   4 m | arrow 104 deg, expected 104]
   screenshot 09_triaged_scene.png
 PASS  Raycast + E opens the first-aid kit inventory  [FIRST-AID KIT  |  EDUCATIONAL SIMULATION]
 PASS  Kit lid animates open
@@ -62,20 +91,35 @@ PASS  Kit lid animates open
 PASS  Wrong supply gives feedback and no reward
   screenshot 12_wrong_supply.png
 PASS  P01 simulated aid with Emergency Blanket
+PASS  P01 beacon settles after aid
 PASS  P02 simulated aid with Trauma Dressing
+PASS  P02 beacon settles after aid
 PASS  P03 simulated aid with Disposable Gloves
+PASS  P03 beacon settles after aid
 PASS  P04 simulated aid with Triangular Bandage
+PASS  P04 beacon settles after aid
+PASS  Tutorial hint disappears after about 15 seconds
+  screenshot 15_crash_closeup.png
 PASS  P05 simulated aid with Sterile Gauze Pads
+PASS  P05 beacon settles after aid
   screenshot 13_aid_complete.png
 PASS  Scenario finishes after all aid
 PASS  All five objectives complete  [5/5]
 PASS  Final score is consistent  [score 1024, expected 1024, time bonus 49]
 PASS  Time bonus capped and below one correct triage
-PASS  Final report includes the disclaimer and rating
+PASS  Final report includes the disclaimer, rating and difficulty
 PASS  Timer stopped at the end
   screenshot 14_final_report.png
+PASS  Restart fades out
 PASS  Restart reloads a fresh scenario
 PASS  Score resets on restart
+PASS  Restart shuffles which person is at which position  [3 of 5 moved | layout 1,3,2,0,4]
+PASS  Triage rule still holds for every shuffled person
+PASS  Difficulty Normal applied after restart
+PASS  Compass arrow points to the nearest unexamined person  [Next person  P04   13 m | arrow 20 deg, expected 20]
+  screenshot 16_restart_shuffled.png
+PASS  Normal difficulty shows no hint
+PASS  Scoring is correct with shuffled positions  [score 550, expected 550]
 PASS  Main Menu button returns to the menu
 PASS  Cursor visible in menu
 RESULT: ALL CHECKS PASSED

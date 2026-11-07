@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace GoldenHour
@@ -6,6 +6,7 @@ namespace GoldenHour
     /// <summary>
     /// First-person WASD + mouse-look controller (Input System only) with gravity and
     /// CharacterController collision. Cursor is locked only while controls are enabled.
+    /// Raises <see cref="Stepped"/> every stride while walking on the ground (footstep audio).
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public sealed class FirstPersonPlayer : MonoBehaviour
@@ -14,6 +15,7 @@ namespace GoldenHour
         [SerializeField] private float sprintSpeed = 6.5f;
         [SerializeField] private float mouseSensitivity = 0.1f;
         [SerializeField] private float gravity = -18f;
+        [SerializeField] private float strideLength = 1.7f;
         [SerializeField] private Transform cameraTransform;
 
         private CharacterController characterController;
@@ -21,6 +23,10 @@ namespace GoldenHour
         private float pitch;
         private bool controlsEnabled;
         private int ignoreLookFrames;
+        private float strideProgress;
+
+        /// <summary>Raised on each footstep; the argument is true while sprinting.</summary>
+        public event System.Action<bool> Stepped;
 
         public Camera PlayerCamera { get; private set; }
         public bool ControlsEnabled => controlsEnabled;
@@ -90,7 +96,7 @@ namespace GoldenHour
             {
                 if (cameraTransform != null && Mouse.current != null)
                 {
-                    Vector2 look = Mouse.current.delta.ReadValue() * mouseSensitivity;
+                    Vector2 look = Mouse.current.delta.ReadValue() * (mouseSensitivity * GameSettings.MouseSensitivity);
                     if (ignoreLookFrames > 0)
                     {
                         ignoreLookFrames--;
@@ -116,7 +122,28 @@ namespace GoldenHour
             else verticalVelocity += gravity * Time.deltaTime;
 
             movement.y = verticalVelocity;
+            Vector3 before = transform.position;
             characterController.Move(movement * Time.deltaTime);
+            TrackStride(before, sprint);
+        }
+
+        private void TrackStride(Vector3 before, bool sprint)
+        {
+            Vector3 delta = transform.position - before;
+            delta.y = 0f;
+            if (!controlsEnabled || !characterController.isGrounded || delta.sqrMagnitude < 0.000001f)
+            {
+                strideProgress = Mathf.Min(strideProgress, strideLength * 0.5f);
+                return;
+            }
+
+            strideProgress += delta.magnitude;
+            float stride = sprint ? strideLength * 1.3f : strideLength;
+            if (strideProgress >= stride)
+            {
+                strideProgress = 0f;
+                Stepped?.Invoke(sprint);
+            }
         }
     }
 }

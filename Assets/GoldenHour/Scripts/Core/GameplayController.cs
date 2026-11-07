@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text;
 using TMPro;
 using UnityEngine;
@@ -8,8 +8,8 @@ using UnityEngine.SceneManagement;
 namespace GoldenHour
 {
     /// <summary>
-    /// Coordinates the scenario loop: briefing → find/examine → triage → first-aid kit →
-    /// supply selection → simulated aid → objectives → final report.
+    /// Coordinates the scenario loop: briefing â†’ find/examine â†’ triage â†’ first-aid kit â†’
+    /// supply selection â†’ simulated aid â†’ objectives â†’ final report.
     /// </summary>
     public sealed class GameplayController : MonoBehaviour
     {
@@ -32,6 +32,7 @@ namespace GoldenHour
 
         [Header("Assets")]
         public Material baseMaterial;
+        public Material unlitMaterial;
         public GameObject mannequinPrefab;
         public GameObject kitPrefab;
 
@@ -44,7 +45,10 @@ namespace GoldenHour
             new Vector3(0.6f, 0f, 13.6f)
         };
 
-        private static readonly float[] PatientYaw = { -100f, 70f, -150f, 160f, 95f };
+        private static readonly float[] PatientYaw = { 180f, 70f, -150f, 160f, 95f };
+
+        /// <summary>Set by Restart: the next scenario load assigns people to shuffled positions.</summary>
+        public static bool ShuffleOnNextLoad { get; set; }
 
         private readonly List<PatientActor> patients = new List<PatientActor>();
         private readonly ObjectiveTracker objectives = new ObjectiveTracker();
@@ -53,6 +57,7 @@ namespace GoldenHour
         private ModalWindow modal;
         private FirstAidKitInteractable firstAidKit;
         private bool paused;
+        private int[] layout = { 0, 1, 2, 3, 4 };
 
         public IReadOnlyList<PatientActor> Patients => patients;
         public ObjectiveTracker Objectives => objectives;
@@ -61,10 +66,18 @@ namespace GoldenHour
         public bool HasStarted { get; private set; }
         public bool IsFinished { get; private set; }
         public string FinalReport { get; private set; } = string.Empty;
+        public Difficulty Difficulty { get; private set; }
+        public GameplayHud Hud => hud;
+
+        /// <summary>Position index used by each patient profile (identity unless shuffled on restart).</summary>
+        public IReadOnlyList<int> Layout => layout;
+        public bool LayoutShuffled { get; private set; }
 
         private void Start()
         {
             MaterialFactory.Template = baseMaterial;
+            MaterialFactory.UnlitTemplate = unlitMaterial;
+            Difficulty = GameSettings.Difficulty;
             ResolveSceneReferences();
             AccidentEnvironment environment = GetComponent<AccidentEnvironment>();
             if (environment == null) environment = gameObject.AddComponent<AccidentEnvironment>();
@@ -75,6 +88,8 @@ namespace GoldenHour
 
             audioManager = GetComponent<GoldenHourAudio>();
             UiFactory.ButtonPressed = audioManager != null ? audioManager.PlayButton : (System.Action)null;
+            ButtonFeedback.Hovered = audioManager != null ? audioManager.PlayHover : (System.Action)null;
+            if (player != null && audioManager != null) player.Stepped += audioManager.PlayFootstep;
             Canvas canvas = UiFactory.CreateCanvas("Golden Hour Gameplay UI");
             hud = new GameplayHud(canvas.transform);
             modal = new ModalWindow(canvas.transform);
@@ -84,6 +99,12 @@ namespace GoldenHour
             if (gameManager != null) gameManager.ResetScenario();
             ShowBriefing();
             RefreshHud();
+            SceneFader.FadeIn();
+        }
+
+        private void OnDestroy()
+        {
+            if (player != null && audioManager != null) player.Stepped -= audioManager.PlayFootstep;
         }
 
         private void ResolveSceneReferences()
@@ -105,7 +126,7 @@ namespace GoldenHour
                 return;
             }
 
-            player.Teleport(AccidentEnvironment.PlayerStart, 0f, 8f);
+            player.Teleport(AccidentEnvironment.PlayerStart, 0f, AccidentEnvironment.PlayerStartPitch);
         }
 
         private void BuildPatients()
@@ -116,17 +137,47 @@ namespace GoldenHour
                 return;
             }
 
+            if (ShuffleOnNextLoad)
+            {
+                ShuffleOnNextLoad = false;
+                layout = ShuffledLayout(patientProfiles.Count, new System.Random());
+                LayoutShuffled = true;
+            }
+
             Transform group = new GameObject("Patients").transform;
             for (int i = 0; i < patientProfiles.Count; i++)
             {
+                int slot = layout[i];
                 GameObject patient = new GameObject(patientProfiles[i].patientId);
                 patient.transform.SetParent(group, false);
-                patient.transform.SetPositionAndRotation(PatientPositions[i],
-                    Quaternion.Euler(0f, PatientYaw[i], 0f));
+                patient.transform.SetPositionAndRotation(PatientPositions[slot],
+                    Quaternion.Euler(0f, PatientYaw[slot], 0f));
                 PatientActor actor = patient.AddComponent<PatientActor>();
                 actor.Initialize(patientProfiles[i], mannequinPrefab);
                 patients.Add(actor);
             }
+        }
+
+        /// <summary>A random permutation that always differs from the default layout.</summary>
+        public static int[] ShuffledLayout(int count, System.Random random)
+        {
+            int[] result = new int[count];
+            for (int i = 0; i < count; i++) result[i] = i;
+            if (count < 2) return result;
+            bool identity = true;
+            while (identity)
+            {
+                for (int i = count - 1; i > 0; i--)
+                {
+                    int j = random.Next(i + 1);
+                    (result[i], result[j]) = (result[j], result[i]);
+                }
+
+                identity = true;
+                for (int i = 0; i < count; i++) identity &= result[i] == i;
+            }
+
+            return result;
         }
 
         private void BuildKit()
@@ -186,6 +237,7 @@ namespace GoldenHour
                 }
 
                 UpdatePrompt();
+                UpdateCompass();
                 if (keyboard != null && keyboard.eKey.wasPressedThisFrame) TryInteract();
             }
 
@@ -223,6 +275,9 @@ namespace GoldenHour
             if (gameManager != null) gameManager.StartScenario();
             if (player != null) player.SetControlsEnabled(true);
             hud.SetStatus("Walk toward the crash past the barriers ahead.");
+            hud.ShowTutorial("<b>TIP</b>  Walk with <b>WASD</b>, look with the <b>mouse</b>. Follow the yellow arrow " +
+                             "and the glowing beacons to each person, look at them and press <b>E</b> to examine.");
+            UpdateCompass();
             RefreshHud();
         }
 
@@ -261,6 +316,51 @@ namespace GoldenHour
             return hit.collider.GetComponentInParent<FirstAidKitInteractable>();
         }
 
+        /// <summary>Points the HUD arrow at the nearest unexamined person, then at the kit while aid is pending.</summary>
+        private void UpdateCompass()
+        {
+            if (playerCamera == null || hud == null) return;
+            Vector3 origin = playerCamera.position;
+            PatientActor nearest = null;
+            float best = float.MaxValue;
+            foreach (PatientActor patient in patients)
+            {
+                if (patient.HasBeenExamined) continue;
+                float distance = (patient.FocusPoint - origin).sqrMagnitude;
+                if (distance < best)
+                {
+                    best = distance;
+                    nearest = patient;
+                }
+            }
+
+            Vector3 target;
+            string label;
+            if (nearest != null)
+            {
+                target = nearest.FocusPoint;
+                label = "Next person  <b>" + nearest.Data.patientId + "</b>";
+            }
+            else if (firstAidKit != null && patients.Exists(item => item.HasBeenTriaged && !item.HasReceivedAid))
+            {
+                target = firstAidKit.transform.position;
+                label = "First-aid kit";
+            }
+            else
+            {
+                hud.SetCompass(false, 0f, string.Empty);
+                return;
+            }
+
+            Vector3 toTarget = target - origin;
+            toTarget.y = 0f;
+            Vector3 forward = playerCamera.forward;
+            forward.y = 0f;
+            float angle = forward.sqrMagnitude > 0.0001f && toTarget.sqrMagnitude > 0.0001f
+                ? Vector3.SignedAngle(forward, toTarget, Vector3.up) : 0f;
+            hud.SetCompass(true, angle, label + "   " + Mathf.RoundToInt(toTarget.magnitude) + " m");
+        }
+
         private void UpdatePrompt()
         {
             object target = playerCamera != null ? FindTarget() : null;
@@ -295,8 +395,8 @@ namespace GoldenHour
                 "<b>Breathing:</b> " + (data.breathing ? "Breathing observed" : "No breathing observed") + "\n" +
                 "<b>Responsiveness:</b> " + data.responsiveness + "\n" +
                 "<b>Bleeding:</b> " + (data.severeBleeding ? "Severe, visible bleeding" : "No severe bleeding seen") + "\n" +
-                previous + "\n\nChoose a triage priority for this person:",
-                new Vector2(920f, 620f), 180f, true);
+                previous + EasyHint() + "\n\nChoose a triage priority for this person:",
+                new Vector2(920f, Difficulty == Difficulty.Easy ? 680f : 620f), 180f, true);
             Transform panel = modal.Panel;
             float y = modal.RowY(1);
             UiFactory.Button(panel, "RED  |  IMMEDIATE", new Vector2(-285f, y), new Vector2(265f, 58f),
@@ -307,6 +407,14 @@ namespace GoldenHour
                 () => AssignTriage(patient, TriageCategory.Green), Palette.TriageGreen);
             UiFactory.Button(panel, "CLOSE", new Vector2(0f, modal.RowY(0)), new Vector2(200f, 48f),
                 ResumeSimulation, Palette.Slate);
+        }
+
+        /// <summary>Easy difficulty: what to look for, in rule order, without giving the answer.</summary>
+        private string EasyHint()
+        {
+            if (Difficulty != Difficulty.Easy) return string.Empty;
+            return "\n<color=#F6D171><b>EASY HINT - what to look for, in order:</b> 1) Can they walk?  " +
+                   "2) Are they breathing?  3) Severe bleeding?  4) Do they respond and follow instructions?</color>";
         }
 
         public void AssignTriage(PatientActor patient, TriageCategory category)
@@ -388,6 +496,9 @@ namespace GoldenHour
             OpenModal("SELECT A SUPPLY  |  " + patient.Data.patientId + "  " + patient.Data.patientName,
                 "<b>Injury:</b> " + patient.Data.injuryDescription + "\n" +
                 "Select the item that best fits this person's simulated aid step." +
+                (Difficulty == Difficulty.Easy
+                    ? "\n<color=#F6D171>Easy hint: match the item to the main visible injury or need.</color>"
+                    : string.Empty) +
                 (feedback != null ? "\n<color=#F6D171>" + feedback + "</color>" : string.Empty),
                 new Vector2(980f, 660f), 500f, true);
             Transform panel = modal.Panel;
@@ -436,16 +547,22 @@ namespace GoldenHour
         private void ShowPauseMenu()
         {
             paused = true;
-            OpenModal("PAUSED", "The scenario timer is paused.\n\nMaster volume", new Vector2(600f, 560f), 330f, true);
+            OpenModal("PAUSED", "The scenario timer is paused.", new Vector2(640f, 640f), 470f, true);
             Transform panel = modal.Panel;
-            UiFactory.VolumeSlider(panel, new Vector2(0f, 90f), new Vector2(420f, 34f));
+            UiFactory.Text(panel, "Master volume", 20, new Vector2(400f, 34f), new Vector2(0f, 150f),
+                TextAlignmentOptions.Center, Palette.LightGrey);
+            UiFactory.VolumeSlider(panel, new Vector2(0f, 114f), new Vector2(420f, 34f));
+            UiFactory.Text(panel, "Mouse sensitivity", 20, new Vector2(400f, 34f), new Vector2(0f, 62f),
+                TextAlignmentOptions.Center, Palette.LightGrey);
+            UiFactory.SensitivitySlider(panel, new Vector2(0f, 26f), new Vector2(420f, 34f));
+            UiFactory.Text(panel, "Difficulty: " + Difficulty.ToString().ToUpperInvariant() + " (change it in the main menu)",
+                16, new Vector2(520f, 30f), new Vector2(0f, -22f), TextAlignmentOptions.Center, Palette.LightGrey);
             UiFactory.Button(panel, "RESUME", new Vector2(0f, modal.RowY(2)), new Vector2(300f, 56f), ResumeSimulation);
             UiFactory.Button(panel, "RESTART", new Vector2(0f, modal.RowY(1)), new Vector2(300f, 56f),
                 RestartScenario, Palette.Slate);
             UiFactory.Button(panel, "MAIN MENU", new Vector2(0f, modal.RowY(0)), new Vector2(300f, 56f),
                 ReturnToMenu, Palette.Slate);
         }
-
         public void ResumeSimulation()
         {
             paused = false;
@@ -457,16 +574,18 @@ namespace GoldenHour
             if (patients.Count > 0 && patients.TrueForAll(item => item.HasReceivedAid)) FinishScenario();
         }
 
+        /// <summary>Reloads the scenario with people shuffled to new positions (fade transition).</summary>
         public void RestartScenario()
         {
             Time.timeScale = 1f;
-            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+            ShuffleOnNextLoad = true;
+            SceneFader.LoadScene(SceneManager.GetActiveScene().name);
         }
 
         public void ReturnToMenu()
         {
             Time.timeScale = 1f;
-            SceneManager.LoadScene(MainMenuScene);
+            SceneFader.LoadScene(MainMenuScene);
         }
 
         private void OpenModal(string title, string body, Vector2 size, float reservedBottom, bool closable)
@@ -474,6 +593,7 @@ namespace GoldenHour
             if (player != null) player.SetControlsEnabled(false);
             if (gameManager != null && HasStarted && !IsFinished) gameManager.PauseScenario();
             hud.SetPrompt(string.Empty);
+            hud.SetCompass(false, 0f, string.Empty);
             modal.Show(title, body, size, reservedBottom, closable);
         }
 
@@ -493,7 +613,8 @@ namespace GoldenHour
 
             StringBuilder report = new StringBuilder();
             report.Append("<b>Total score: ").Append(score).Append(" / ").Append(maximum).Append("</b>   ");
-            report.Append("Rating: <b>").Append(Rating(score, maximum)).Append("</b>\n");
+            report.Append("Rating: <b>").Append(Rating(score, maximum)).Append("</b>   Difficulty: ")
+                .Append(Difficulty.ToString().ToUpperInvariant()).Append("\n");
             report.Append(allAided ? "All simulated aid completed with " + FormatTime(remaining) + " remaining."
                                    : "<color=#F6D171>Time expired before every step was completed.</color>");
             report.Append("\n\n");

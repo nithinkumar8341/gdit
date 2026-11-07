@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,6 +10,8 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 
 namespace GoldenHour.EditorTools
@@ -27,6 +29,16 @@ namespace GoldenHour.EditorTools
         private const string AudioPath = "Assets/GoldenHour/Audio/";
         private const string ModelPath = "Assets/GoldenHour/Blender/Exports/";
         private const string BaseMaterialPath = "Assets/GoldenHour/Materials/GH_RuntimeBase.mat";
+        private const string UnlitMaterialPath = "Assets/GoldenHour/Materials/GH_RuntimeUnlit.mat";
+        private const string SmokeMaterialPath = "Assets/GoldenHour/Materials/GH_Smoke.mat";
+        private const string SmokeTexturePath = "Assets/GoldenHour/Materials/GH_SmokePuff.png";
+        private const string SkyMaterialPath = "Assets/GoldenHour/Materials/GH_LateAfternoonSky.mat";
+        private const string PostProfilePath = "Assets/GoldenHour/Settings/GH_PostProcessing.asset";
+        private const string PcPipelinePath = "Assets/Settings/PC_RPAsset.asset";
+        private static readonly string[] AudioClips =
+        {
+            "Roadside_Ambience", "UI_Click", "UI_Hover", "Footstep", "Kit_Open", "Objective_Complete", "Patient_Interaction"
+        };
         private const string BuildPath = "Builds/GoldenHour/GoldenHour.exe";
 
         private static readonly string[] PatientIds = { "P01", "P02", "P03", "P04", "P05" };
@@ -37,6 +49,7 @@ namespace GoldenHour.EditorTools
         {
             EnsureDirectories();
             CreateBaseMaterial();
+            CreateVisualAssets();
             CreateGameData();
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -96,7 +109,7 @@ namespace GoldenHour.EditorTools
             GameObject kit = AssetDatabase.LoadAssetAtPath<GameObject>(ModelPath + "FirstAidKit.fbx");
             Require(kit.GetComponentsInChildren<Transform>().Any(item => item.name == "KitHinge"),
                 "FirstAidKit.fbx must contain the KitHinge lid pivot.");
-            foreach (string clip in new[] { "Roadside_Ambience", "UI_Click", "Kit_Open", "Objective_Complete", "Patient_Interaction" })
+            foreach (string clip in AudioClips)
             {
                 LoadClip(clip + ".wav");
             }
@@ -109,11 +122,28 @@ namespace GoldenHour.EditorTools
             GameplayController gameplay = UnityEngine.Object.FindAnyObjectByType<GameplayController>();
             Require(gameplay != null, "GameplayController is missing.");
             Require(gameplay.patientProfiles.Count == 5 && gameplay.supplies.Count == 5 &&
-                    gameplay.baseMaterial != null && gameplay.mannequinPrefab != null && gameplay.kitPrefab != null,
+                    gameplay.baseMaterial != null && gameplay.unlitMaterial != null &&
+                    gameplay.mannequinPrefab != null && gameplay.kitPrefab != null,
                 "GameplayController references are not fully assigned.");
             AccidentEnvironment environment = gameplay.GetComponent<AccidentEnvironment>();
             Require(environment != null && environment.carPrefab != null && environment.barrierPrefab != null &&
-                    environment.conePrefab != null, "AccidentEnvironment prefab references are not assigned.");
+                    environment.conePrefab != null && environment.smokeMaterial != null,
+                "AccidentEnvironment prefab/material references are not assigned.");
+            GoldenHourAudio gameAudio = gameplay.GetComponent<GoldenHourAudio>();
+            Require(gameAudio != null && gameAudio.footstep != null && gameAudio.buttonHover != null,
+                "Gameplay audio needs footstep and hover clips.");
+            Require(RenderSettings.fog && RenderSettings.skybox != null &&
+                    RenderSettings.skybox.shader.name == "Skybox/Procedural",
+                "Gameplay scene needs fog and the late-afternoon skybox.");
+            Camera playerView = UnityEngine.Object.FindAnyObjectByType<FirstPersonPlayer>().GetComponentInChildren<Camera>();
+            Require(playerView != null && playerView.GetUniversalAdditionalCameraData().renderPostProcessing,
+                "Player camera must render post-processing.");
+            Volume volume = UnityEngine.Object.FindAnyObjectByType<Volume>();
+            Require(volume != null && volume.isGlobal && volume.sharedProfile != null &&
+                    AssetDatabase.GetAssetPath(volume.sharedProfile) == PostProfilePath &&
+                    volume.sharedProfile.Has<Bloom>() && volume.sharedProfile.Has<Vignette>() &&
+                    volume.sharedProfile.Has<ColorAdjustments>() && volume.sharedProfile.Has<Tonemapping>(),
+                "Global Volume must use the Golden Hour post-processing profile (bloom, vignette, colour grading).");
             Require(UnityEngine.Object.FindAnyObjectByType<FirstPersonPlayer>() != null, "FirstPersonPlayer is missing.");
             Require(UnityEngine.Object.FindAnyObjectByType<InputSystemUIInputModule>() != null,
                 "Gameplay EventSystem does not use the Input System UI module.");
@@ -166,7 +196,7 @@ namespace GoldenHour.EditorTools
             foreach (string directory in new[]
                      {
                          "Assets/GoldenHour/Scenes", "Assets/GoldenHour/ScriptableObjects",
-                         "Assets/GoldenHour/Materials", "Assets/GoldenHour/Audio"
+                         "Assets/GoldenHour/Materials", "Assets/GoldenHour/Audio", "Assets/GoldenHour/Settings"
                      })
             {
                 Directory.CreateDirectory(directory);
@@ -188,6 +218,144 @@ namespace GoldenHour.EditorTools
 
             material.color = Color.white;
             EditorUtility.SetDirty(material);
+        }
+
+        /// <summary>
+        /// Serialized materials (so shaders/variants ship in the build), the smoke texture, the
+        /// late-afternoon skybox, the post-processing profile and laptop-friendly shadow settings.
+        /// </summary>
+        private static void CreateVisualAssets()
+        {
+            Material unlit = LoadOrCreateMaterial(UnlitMaterialPath, "Universal Render Pipeline/Unlit");
+            unlit.SetColor("_BaseColor", Color.white);
+            EditorUtility.SetDirty(unlit);
+
+            Texture2D puff = CreateSmokeTexture();
+            Material smoke = LoadOrCreateMaterial(SmokeMaterialPath, "Universal Render Pipeline/Particles/Unlit");
+            smoke.SetFloat("_Surface", 1f);
+            smoke.SetFloat("_Blend", 0f);
+            smoke.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            smoke.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            smoke.SetFloat("_SrcBlendAlpha", (float)BlendMode.One);
+            smoke.SetFloat("_DstBlendAlpha", (float)BlendMode.OneMinusSrcAlpha);
+            smoke.SetFloat("_ZWrite", 0f);
+            smoke.SetOverrideTag("RenderType", "Transparent");
+            smoke.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            smoke.renderQueue = (int)RenderQueue.Transparent;
+            smoke.SetTexture("_BaseMap", puff);
+            smoke.SetColor("_BaseColor", Color.white);
+            EditorUtility.SetDirty(smoke);
+
+            Material sky = LoadOrCreateMaterial(SkyMaterialPath, "Skybox/Procedural");
+            sky.SetFloat("_SunSize", 0.05f);
+            sky.SetFloat("_SunSizeConvergence", 6f);
+            sky.SetFloat("_AtmosphereThickness", 1.35f);
+            sky.SetColor("_SkyTint", new Color(0.62f, 0.56f, 0.52f));
+            sky.SetColor("_GroundColor", new Color(0.42f, 0.37f, 0.33f));
+            sky.SetFloat("_Exposure", 1.15f);
+            EditorUtility.SetDirty(sky);
+
+            VolumeProfile profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(PostProfilePath);
+            if (profile == null)
+            {
+                profile = ScriptableObject.CreateInstance<VolumeProfile>();
+                AssetDatabase.CreateAsset(profile, PostProfilePath);
+            }
+
+            Bloom bloom = ProfileComponent<Bloom>(profile);
+            bloom.threshold.Override(1.05f);
+            bloom.intensity.Override(0.55f);
+            bloom.scatter.Override(0.62f);
+            bloom.tint.Override(new Color(1f, 0.9f, 0.78f));
+            Vignette vignette = ProfileComponent<Vignette>(profile);
+            vignette.intensity.Override(0.27f);
+            vignette.smoothness.Override(0.45f);
+            vignette.color.Override(new Color(0.08f, 0.05f, 0.04f));
+            ColorAdjustments grading = ProfileComponent<ColorAdjustments>(profile);
+            grading.postExposure.Override(0.12f);
+            grading.contrast.Override(12f);
+            grading.saturation.Override(6f);
+            grading.colorFilter.Override(new Color(1f, 0.96f, 0.9f));
+            WhiteBalance balance = ProfileComponent<WhiteBalance>(profile);
+            balance.temperature.Override(10f);
+            balance.tint.Override(2f);
+            Tonemapping tonemapping = ProfileComponent<Tonemapping>(profile);
+            tonemapping.mode.Override(TonemappingMode.Neutral);
+            EditorUtility.SetDirty(profile);
+
+            // Laptop-friendly shadows: shorter distance, two cascades, soft shadows kept.
+            UniversalRenderPipelineAsset pipeline = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(PcPipelinePath);
+            if (pipeline != null)
+            {
+                pipeline.shadowDistance = 45f;
+                pipeline.shadowCascadeCount = 2;
+                EditorUtility.SetDirty(pipeline);
+            }
+        }
+
+        private static T ProfileComponent<T>(VolumeProfile profile) where T : VolumeComponent
+        {
+            if (profile.TryGet(out T existing)) return existing;
+            T component = profile.Add<T>();
+            component.name = typeof(T).Name;
+            component.hideFlags = HideFlags.HideInInspector | HideFlags.HideInHierarchy;
+            AssetDatabase.AddObjectToAsset(component, profile);
+            return component;
+        }
+
+        private static Material LoadOrCreateMaterial(string path, string shaderName)
+        {
+            Shader shader = Shader.Find(shaderName);
+            Require(shader != null, shaderName + " shader not found.");
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null)
+            {
+                material = new Material(shader) { name = Path.GetFileNameWithoutExtension(path) };
+                AssetDatabase.CreateAsset(material, path);
+            }
+            else if (material.shader != shader)
+            {
+                material.shader = shader;
+            }
+
+            return material;
+        }
+
+        /// <summary>Soft round puff (white, radial alpha) for the smoke particles.</summary>
+        private static Texture2D CreateSmokeTexture()
+        {
+            if (!File.Exists(SmokeTexturePath))
+            {
+                const int size = 64;
+                Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                for (int y = 0; y < size; y++)
+                {
+                    for (int x = 0; x < size; x++)
+                    {
+                        float dx = (x + 0.5f) / size * 2f - 1f;
+                        float dy = (y + 0.5f) / size * 2f - 1f;
+                        float distance = Mathf.Sqrt(dx * dx + dy * dy);
+                        float alpha = Mathf.Clamp01(1f - distance);
+                        alpha = alpha * alpha * (3f - 2f * alpha);
+                        texture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+                    }
+                }
+
+                File.WriteAllBytes(SmokeTexturePath, texture.EncodeToPNG());
+                UnityEngine.Object.DestroyImmediate(texture);
+                AssetDatabase.ImportAsset(SmokeTexturePath);
+            }
+
+            TextureImporter importer = (TextureImporter)AssetImporter.GetAtPath(SmokeTexturePath);
+            if (importer != null && (!importer.alphaIsTransparency || importer.mipmapEnabled))
+            {
+                importer.alphaIsTransparency = true;
+                importer.mipmapEnabled = false;
+                importer.wrapMode = TextureWrapMode.Clamp;
+                importer.SaveAndReimport();
+            }
+
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(SmokeTexturePath);
         }
 
         private static void CreateGameData()
@@ -351,7 +519,13 @@ namespace GoldenHour.EditorTools
             camera.transform.localRotation = Quaternion.identity;
             camera.nearClipPlane = 0.05f;
             camera.fieldOfView = 70f;
+            camera.farClipPlane = 160f;
             camera.gameObject.tag = "MainCamera";
+            UniversalAdditionalCameraData cameraData = camera.GetUniversalAdditionalCameraData();
+            cameraData.renderPostProcessing = true;
+            cameraData.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
+            EditorUtility.SetDirty(cameraData);
+            EditorUtility.SetDirty(camera);
             if (camera.GetComponent<AudioListener>() == null) camera.gameObject.AddComponent<AudioListener>();
 
             CharacterController characterController = playerObject.GetComponent<CharacterController>();
@@ -385,6 +559,7 @@ namespace GoldenHour.EditorTools
             gameplay.patientProfiles = LoadPatients();
             gameplay.supplies = LoadSupplies();
             gameplay.baseMaterial = AssetDatabase.LoadAssetAtPath<Material>(BaseMaterialPath);
+            gameplay.unlitMaterial = AssetDatabase.LoadAssetAtPath<Material>(UnlitMaterialPath);
             gameplay.mannequinPrefab = LoadModel("LowPolyMannequin");
             gameplay.kitPrefab = LoadModel("FirstAidKit");
             Require(gameplay.patientProfiles.Count == 5, "Patient data assets were not created.");
@@ -396,6 +571,7 @@ namespace GoldenHour.EditorTools
             environment.carPrefab = LoadModel("DamagedCar");
             environment.barrierPrefab = LoadModel("RoadBarrier");
             environment.conePrefab = LoadModel("AccidentProps");
+            environment.smokeMaterial = AssetDatabase.LoadAssetAtPath<Material>(SmokeMaterialPath);
             EditorUtility.SetDirty(environment);
 
             GoldenHourAudio gameAudio = managerObject.GetComponent<GoldenHourAudio>();
@@ -403,17 +579,18 @@ namespace GoldenHour.EditorTools
             AssignAudio(gameAudio);
             ConfigureEventSystem(eventSystem);
 
-            Light sun = UnityEngine.Object.FindObjectsByType<Light>()
-                .FirstOrDefault(item => item.type == LightType.Directional);
-            if (sun != null)
-            {
-                sun.transform.rotation = Quaternion.Euler(42f, -35f, 0f);
-                sun.intensity = 1.6f;
-                sun.color = new Color32(255, 236, 205, 255);
-                sun.shadows = LightShadows.Soft;
-                EditorUtility.SetDirty(sun);
-            }
-
+            // Late-afternoon lighting and haze saved into the scene (so fog shader variants ship),
+            // the procedural skybox, and the post-processing volume.
+            AccidentEnvironment.ApplyLighting();
+            Light sun = RenderSettings.sun;
+            if (sun != null) EditorUtility.SetDirty(sun);
+            RenderSettings.skybox = AssetDatabase.LoadAssetAtPath<Material>(SkyMaterialPath);
+            Volume volume = UnityEngine.Object.FindAnyObjectByType<Volume>();
+            if (volume == null) volume = new GameObject("Global Volume").AddComponent<Volume>();
+            volume.isGlobal = true;
+            volume.priority = 1f;
+            volume.sharedProfile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(PostProfilePath);
+            EditorUtility.SetDirty(volume);
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
         }
@@ -458,6 +635,8 @@ namespace GoldenHour.EditorTools
             audio.kitOpen = LoadClip("Kit_Open.wav");
             audio.objectiveComplete = LoadClip("Objective_Complete.wav");
             audio.patientInteraction = LoadClip("Patient_Interaction.wav");
+            audio.footstep = LoadClip("Footstep.wav");
+            audio.buttonHover = LoadClip("UI_Hover.wav");
             EditorUtility.SetDirty(audio);
         }
 

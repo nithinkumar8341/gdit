@@ -1,17 +1,17 @@
 # Golden Hour — Testing Report
 
-Date: 2026-11-07 · Unity 6000.6.2f1 · Windows 11 · Build: `Builds/GoldenHour/GoldenHour.exe`
+Date: 2026-11-07 · Unity 6000.6.2f1 · Windows 11 · Build: `Builds/GoldenHour/GoldenHour.exe` (polish pass)
 
 ## 1. Compilation (Unity batch mode)
 
 | Check | Result | Evidence |
 |---|---|---|
-| Fix for the 4 handoff errors (CS0246 `BuildFailedException`, 3× CS0103 `DestroyNamedObject`) | PASS | Batch compile log: 0 `error CS`, 0 `warning CS` |
-| Full project compile after refactor (runtime + editor assemblies) | PASS | `BuildProject`, `ValidateProject` and `BuildWindowsPlayer` logs: 0 errors, 0 C# warnings |
+| Full project compile after the polish pass (runtime + editor assemblies) | PASS | `BuildProject`, `ValidateProject` and `BuildWindowsPlayer` logs: 0 `error CS`, 0 `warning CS` |
+| First polish compile | Fixed | 2 files had edits that did not apply (`GoldenHourAudio` fields, a duplicate local in `PatientActor`). Fixed and recompiled clean. |
 
 ## 2. Editor automation and validation (`GoldenHour/Validate Project`)
 
-Run in batch mode with `-executeMethod GoldenHour.EditorTools.GoldenHourProjectBuilder.ValidateProject` (exit code 0, log line `Golden Hour project validation passed.`). Validation throws on any failure, so a pass means every item below held:
+Run in batch mode with `-executeMethod GoldenHour.EditorTools.GoldenHourProjectBuilder.ValidateProject`. Exit code 0; the log shows `Golden Hour project validation passed.` Validation throws on any failure, so a pass means every item below held.
 
 | Validated item | Result |
 |---|---|
@@ -22,57 +22,69 @@ Run in batch mode with `-executeMethod GoldenHour.EditorTools.GoldenHourProjectB
 | 5 SupplyData assets; every patient has a recommended supply | PASS |
 | Build Settings: `MainMenu` (index 0) and `Samplespace` | PASS |
 | Blender FBX exports imported (mannequin, kit with `KitHinge`, barrier, cone, damaged car) | PASS |
-| 5 procedural WAVs imported | PASS |
-| Gameplay scene keeps existing Player, GameManager, ScoreManager and EventSystem; GameplayController / AccidentEnvironment references assigned; InputSystemUIInputModule present; no StandaloneInputModule; AudioListener present | PASS |
+| 7 procedural WAVs imported, including the new `Footstep` and `UI_Hover` | PASS |
+| Gameplay scene keeps the existing Player, GameManager, ScoreManager and EventSystem. References are assigned, including the unlit and smoke materials. InputSystemUIInputModule is present, StandaloneInputModule is absent, and an AudioListener is present. | PASS |
+| **New:** fog on and the procedural late-afternoon skybox saved in the scene. The player camera renders post-processing. The Global Volume uses `GH_PostProcessing` (bloom, vignette, colour adjustments, tonemapping). | PASS |
 | Main menu has MainMenuController, InputSystemUIInputModule, Camera and AudioListener | PASS |
-| Template leftovers `Assets/TutorialInfo` and `Assets/Readme.asset` removed | PASS |
+| Template leftovers removed | PASS |
 
 ## 3. Windows build
 
-`GoldenHour/Build Windows Player`: `Build Finished, Result: Success`, 111,357,687 bytes reported. The 3 build warnings are all TextMesh Pro package shader pragma deprecations (`enable_d3d11_debug_symbols`), not project code.
+`GoldenHour/Build Windows Player` reported `Build Finished, Result: Success`, 112,022,023 bytes. The 3 build warnings are TextMesh Pro package shader pragma deprecations (`enable_d3d11_debug_symbols`), not project code.
 
 ## 4. Automated end-to-end playtest in the built player
 
 Command: `GoldenHour.exe -screen-fullscreen 0 -screen-width 1600 -screen-height 900 -goldenhour-autotest <dir>`
 
-Result: **65 / 65 checks passed**, exit code 0, 0 exceptions in the player log. Full log and 14 screenshots: `Docs/TestEvidence/`.
+Result: **107 / 107 checks passed**, exit code 0.
+
+The player log contains:
+- 0 exceptions;
+- 0 TextMesh Pro "Ellipsis is not available" warnings.
+
+The first run had 1 failure: the smoke check ran before any particle had spawned. The close-up screenshot showed the smoke working. I prewarmed the smoke and made the check wait for particles.
+
+Full log and 16 screenshots: `Docs/TestEvidence/`. The playtest restores the player's saved settings when it ends.
 
 | Area | What was exercised | Result |
 |---|---|---|
-| Main menu | Loads first; How to Play (with disclaimer); Settings slider changes `AudioListener.volume`; Start loads gameplay | PASS |
-| Briefing / audio | Briefing modal with disclaimer before play; ambience AudioSource playing | PASS |
-| Player | Timer starts; cursor locks; player settles on ground (y = 0.08); **real Input System W key** moved the player 4.21 m | PASS |
-| Pause | **Real Esc key** opens pause; timer frozen ≥ 0.6 s; cursor unlocked; Esc resumes | PASS |
-| Kit gating | Kit refused before any triage | PASS |
-| Objectives | Reach-scene completes after passing the barriers; examine-all/triage-all; supply; aid-all → 5/5 | PASS |
-| Examination | Raycast from the camera hits each of the 5 patients (P01 via a **real E key press**, P02–P05 via the same `TryInteract` raycast path). The expected triage and reasoning are not on screen before the decision | PASS |
-| Triage | Wrong GREEN for P04 → feedback, no credit, −15; reassess → correct; 5/5 correct afterwards | PASS |
-| First-aid kit | Raycast opens inventory; lid rotates > 90° (visually confirmed opening away from the player) | PASS |
-| Supplies | Wrong supply → feedback, no aid credit, −10; correct supply for all 5 → simulated aid complete | PASS |
-| Final report | Ends after all aid; score 1024 = 500 + 375 + 125 − 15 − 10 + 49 time bonus; bonus ≤ 50 < 100; disclaimer and rating present; timer stopped | PASS |
-| Navigation | Restart reloads a fresh scenario with score 0; Main Menu returns to the menu with a visible cursor | PASS |
+| Main menu | Loads first and fades in. Buttons grow on hover and shrink on press. How to Play shows the disclaimer. Volume slider changes `AudioListener.volume`. Sensitivity slider saves. Difficulty switches to Easy. Start fades out, then loads. | PASS |
+| HUD (polish item 1) | Every root canvas is Screen Space - Overlay, so it is drawn after the 3D world. Each HUD text has a dark backing, so road markings sit behind opaque panels (screenshots 05, 09, 15). Overflow uses Truncate, so no Ellipsis warning. | PASS |
+| Patient visibility (2) | Start is at z = −13.5 (was −17), 11.8 m from the nearest person. All 5 beacons are on screen with clear line of sight from the start. Beacons pulse until aid, take the triage colour, then settle. The compass arrow matches the true bearing to the nearest unexamined person (22° = 22°), then to the kit (104° = 104°). | PASS |
+| Visuals (3) | Warm low sun (24° elevation) with soft shadows. Linear fog. Post-processing on the camera; the profile has bloom, vignette and colour grading. Smoke emitting (37 particles). All 4 hazard lamps flash. Skid marks, fences, signs, grass and lamp bulbs present. | PASS |
+| Game feel (4) | Footsteps play while walking (2 steps in 1 s of W). Pause menu has volume and sensitivity. Tutorial tip shows at start and is gone after ~15 s. Scene changes fade. | PASS |
+| Difficulty (5) | Easy carries into the scenario. The examination shows the "EASY HINT" checklist without the answer. The final report says "Difficulty: EASY". After restart on Normal, no hint is shown. | PASS |
+| Shuffle (5) | Restart reshuffles positions: layout `1,3,2,0,4`, 3 of 5 people moved. The triage rule holds for everyone. Five correct triages score exactly 5×100 + 2×25 = 550. | PASS |
+| Core loop (unchanged) | Real W/E/Esc through the Input System. Pause freezes the timer. Kit refused before triage. Raycast examines all 5. Wrong triage → feedback and −15, then reassessed. Lid opens > 90°. Wrong supply → −10 and no credit. Aid for all 5. Final score 1024 = 500 + 375 + 125 − 15 − 10 + 49 (time bonus ≤ 50). Restart; Main Menu shows the cursor. | PASS |
 
 ### Visual review of screenshots
 
-The screenshots in `Docs/TestEvidence/` were reviewed. Findings, all fixed before the final run:
-- The kit lid first opened downward, then opened toward the camera and hid the supplies.
-- Modal panels had excess empty space.
-- 3D patient labels were oversized at close range.
+I reviewed the screenshots in `Docs/TestEvidence/`. The first polish run showed two problems, both fixed before the final run:
+- The tutorial tip covered the beacons in mid-screen. It now sits below the crosshair (05).
+- Beacons over lying people sat at eye height when standing beside them. They are now at least 2.6 m high.
 
-The final screenshots show:
-- correctly oriented Blender models (standing and lying mannequins, car, barriers, cones, kit);
-- live triage markers and status labels;
-- readable white / red / charcoal UI.
+Final screenshots show:
+- the warm sun with long shadows and haze;
+- glowing beacons and beams over every person;
+- the compass and the dark-backed HUD text;
+- hazard lamps and smoke on the car, and skid marks leading to it (15);
+- fences, verges with grass and bushes, lamp bulbs, the "ACCIDENT AHEAD" board and the speed sign.
 
 ## 5. Limitations — what was NOT verified automatically
 
-- **Mouse look** with a physical mouse. The test aims the camera programmatically.
-- **Button clicks with the pointer.** The test calls the same methods the buttons invoke. EventSystem/InputSystemUIInputModule presence was verified, not physical clicks.
-- **Audible output** and loudness. Only playback state and volume values were checked.
-- **Running out the 15-minute timer.** The end-on-timeout path is code-reviewed but not run.
-- **Fullscreen, other resolutions and multi-monitor behaviour.** Tested windowed at 1600×900 only.
-- **Third-party samples.** `Assets/TextMesh Pro/Examples & Extras/` still contains legacy `Input.*` calls. They are TMP package samples that no game scene uses, preserved as source assets.
+- **Frame rate on a student laptop.** I did not measure it. The budget is kept small:
+  - shadows: 2 cascades up to 45 m;
+  - SSAO at half resolution;
+  - one extra unshadowed point light;
+  - at most 60 smoke particles;
+  - colliders removed from decoration.
 
-Manual playthrough steps are listed in `README.md` (Play) and should cover the items above.
+  An integrated-GPU check is still needed.
+- **Mouse look and sensitivity feel** with a physical mouse. The test sets the value and aims the camera from code.
+- **Pointer hover and clicks.** The test calls the `ButtonFeedback` handlers and the button methods directly.
+- **Audible output.** Footstep and hover playback were counted and triggered, not listened to.
+- **Running out the 15-minute timer.** Reviewed in code, not run.
+- **Fullscreen and other resolutions.** Tested windowed at 1600×900 only.
+- **Third-party samples.** `Assets/TextMesh Pro/Examples & Extras/` still contains legacy `Input.*` calls. No game scene uses them.
 
 *This is an educational simulation, not medical training or medical advice.*

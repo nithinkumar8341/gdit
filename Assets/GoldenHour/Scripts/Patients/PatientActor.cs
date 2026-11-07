@@ -5,7 +5,7 @@ namespace GoldenHour
 {
     /// <summary>
     /// One injured person in the scene: visual pose (standing if able to walk, otherwise lying),
-    /// interaction collider, triage marker and a live status label.
+    /// interaction collider, a pulsing beacon (visible from a distance) and a live status label.
     /// </summary>
     public sealed class PatientActor : MonoBehaviour
     {
@@ -18,9 +18,10 @@ namespace GoldenHour
 
         /// <summary>World point a rescuer should look at to examine this person.</summary>
         public Vector3 FocusPoint => transform.TransformPoint(focusLocal);
+        public PatientBeacon Beacon => beacon;
 
         private Vector3 focusLocal;
-        private Renderer markerRenderer;
+        private PatientBeacon beacon;
         private TextMeshPro statusLabel;
 
         public void Initialize(PatientData data, GameObject visualPrefab)
@@ -73,22 +74,18 @@ namespace GoldenHour
 
             if (data.severeBleeding) CreateBleedingCue(lying);
 
-            float labelHeight = lying ? 1.25f : 2.25f;
+            float labelHeight = lying ? 1.3f : 2.2f;
             Vector3 labelPosition = new Vector3(0f, labelHeight, lying ? -0.9f : 0f);
-            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            marker.name = "Triage Marker";
-            marker.transform.SetParent(transform, false);
-            marker.transform.localPosition = labelPosition + Vector3.up * 0.42f;
-            marker.transform.localScale = Vector3.one * 0.2f;
-            Destroy(marker.GetComponent<Collider>());
-            markerRenderer = marker.GetComponent<Renderer>();
-            markerRenderer.sharedMaterial = MaterialFactory.Create(Palette.Slate);
-
+            GameObject beaconObject = new GameObject("Patient Beacon");
+            beaconObject.transform.SetParent(transform, false);
+            beaconObject.transform.localPosition = new Vector3(0f, 0f, labelPosition.z);
+            beacon = beaconObject.AddComponent<PatientBeacon>();
+            beacon.Initialize(Mathf.Max(labelHeight + 0.75f, 2.6f));
             GameObject labelObject = new GameObject("Status Label");
             labelObject.transform.SetParent(transform, false);
             labelObject.transform.localPosition = labelPosition;
             statusLabel = labelObject.AddComponent<TextMeshPro>();
-            statusLabel.fontSize = 1.6f;
+            statusLabel.fontSize = 2f;
             statusLabel.alignment = TextAlignmentOptions.Center;
             statusLabel.color = Color.white;
             statusLabel.outlineWidth = 0.25f;
@@ -112,7 +109,6 @@ namespace GoldenHour
             HasBeenTriaged = true;
             AssignedCategory = category;
             LastTriageWasCorrect = category == TriageEvaluator.Evaluate(Data);
-            if (markerRenderer != null) MaterialFactory.Tint(markerRenderer, Palette.ForCategory(category));
             RefreshStatus();
         }
 
@@ -124,6 +120,13 @@ namespace GoldenHour
 
         private void RefreshStatus()
         {
+            if (beacon != null)
+            {
+                Color beaconColor = HasBeenTriaged ? Palette.ForCategory(AssignedCategory)
+                    : HasBeenExamined ? Palette.LightGrey : Palette.Beacon;
+                beacon.SetState(HasReceivedAid ? Palette.TriageGreen : beaconColor, HasReceivedAid);
+            }
+
             if (statusLabel == null) return;
             string state;
             if (HasReceivedAid) state = "<color=#7FE0A6>AID GIVEN</color>";

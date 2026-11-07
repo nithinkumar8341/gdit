@@ -1,4 +1,4 @@
-import math
+﻿import math
 import os
 import random
 import struct
@@ -55,4 +55,14 @@ write_wave(
                      math.sin(2 * math.pi * 117 * t) * 0.025 +
                      random.uniform(-0.45, 0.45) * 0.012) *
                     (0.7 + 0.3 * math.sin(2 * math.pi * t / 6.0)))
+random.seed(31)
+write_wave(
+    "Footstep.wav", 0.16,
+    lambda t, i, n: (random.uniform(-1.0, 1.0) * 0.5 +
+                     math.sin(2 * math.pi * 95 * t) * 0.6) *
+                    math.exp(-t * 34) * 0.42)
+write_wave(
+    "UI_Hover.wav", 0.05,
+    lambda t, i, n: math.sin(2 * math.pi * 1320 * t) *
+                    math.exp(-t * 70) * 0.12)
 print("GOLDEN_HOUR_AUDIO_OK")

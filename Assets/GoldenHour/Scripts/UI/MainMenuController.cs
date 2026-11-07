@@ -1,10 +1,9 @@
-using TMPro;
+﻿using TMPro;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace GoldenHour
 {
-    /// <summary>Main menu: Start, How to Play (with disclaimer), Settings (volume) and Exit.</summary>
+    /// <summary>Main menu: Start, How to Play (with disclaimer), Settings (volume, sensitivity, difficulty) and Exit.</summary>
     public sealed class MainMenuController : MonoBehaviour
     {
         public const string GameScene = "Samplespace";
@@ -21,13 +20,15 @@ namespace GoldenHour
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
             Application.targetFrameRate = 60;
-            AudioListener.volume = PlayerPrefs.GetFloat(UiFactory.VolumePrefKey, 0.8f);
+            AudioListener.volume = GameSettings.Volume;
             GoldenHourAudio audioManager = GetComponent<GoldenHourAudio>();
             UiFactory.ButtonPressed = audioManager != null ? audioManager.PlayButton : (System.Action)null;
+            ButtonFeedback.Hovered = audioManager != null ? audioManager.PlayHover : (System.Action)null;
             canvas = UiFactory.CreateCanvas("Golden Hour Main Menu");
             UiFactory.Panel(canvas.transform, "Header Stripe", new Vector2(4000f, 14f),
                 new Vector2(0f, 420f), Palette.EmergencyRed);
             ShowHome();
+            SceneFader.FadeIn();
         }
 
         public void ShowHome()
@@ -59,12 +60,12 @@ namespace GoldenHour
                 new Vector2(0f, 340f), TextAlignmentOptions.Center).fontStyle = FontStyles.Bold;
             string instructions =
                 "<b>MISSION</b>\nYou arrive first at a road accident. Find the five people involved, examine each one, assign a triage priority, then use the first-aid kit to complete a simple simulated aid step for everyone.\n\n" +
-                "<b>CONTROLS</b>\nWASD move  |  Mouse look  |  Shift walk faster  |  E examine / open kit  |  Esc pause or close a panel\n\n" +
+                "<b>CONTROLS</b>\nWASD move  |  Mouse look  |  Shift walk faster  |  E examine / open kit  |  Esc pause or close a panel. Follow the on-screen arrow and the light beacons to find people.\n\n" +
                 "<b>LEARNING TRIAGE MODEL (simplified, START-style)</b>\n" +
                 "<color=#4CC07F>GREEN / Minor</color>: the person can walk.\n" +
                 "<color=#FF6B6B>RED / Immediate</color>: not breathing, severe visible bleeding, or unresponsive.\n" +
                 "<color=#F2C14E>YELLOW / Delayed</color>: cannot walk but none of the RED signs.\n" +
-                "Read the observations and decide; the expected answer is only shown after your choice. You can reassess anyone.\n\n" +
+                "Read the observations and decide; the expected answer is only shown after your choice. You can reassess anyone. <b>Easy</b> difficulty (Settings) adds a checklist of what to look for; <b>Normal</b> does not. Positions change each time you restart.\n\n" +
                 "<b>SCORING</b>\nCorrect triage +100, completed simulated aid +75, objectives +25 each. Wrong triage -15, wrong supply -10. A small time bonus (max +50) never outweighs accuracy.\n\n" +
                 "<b>DISCLAIMER</b>\nThis is an educational simulation, not medical training, medical advice or a substitute for emergency services. In a real emergency, call local emergency services and follow qualified professional guidance.";
             TMP_Text body = UiFactory.Text(view.transform, instructions, 19, new Vector2(900f, 580f),
@@ -78,21 +79,42 @@ namespace GoldenHour
 
         public void ShowSettings()
         {
-            GameObject view = NewView("Settings", new Vector2(720f, 520f));
+            GameObject view = NewView("Settings", new Vector2(780f, 600f));
             UiFactory.Text(view.transform, "SETTINGS", 38, new Vector2(600f, 60f),
-                new Vector2(0f, 190f), TextAlignmentOptions.Center).fontStyle = FontStyles.Bold;
-            UiFactory.Text(view.transform, "MASTER VOLUME", 22, new Vector2(500f, 50f),
-                new Vector2(0f, 95f), TextAlignmentOptions.Center);
-            UiFactory.VolumeSlider(view.transform, new Vector2(0f, 30f), new Vector2(460f, 36f));
-            UiFactory.Text(view.transform, "Saved automatically. Also available from the in-game pause menu.",
-                16, new Vector2(600f, 40f), new Vector2(0f, -40f), TextAlignmentOptions.Center, Palette.LightGrey);
-            UiFactory.Button(view.transform, "BACK", new Vector2(0f, -175f),
+                new Vector2(0f, 240f), TextAlignmentOptions.Center).fontStyle = FontStyles.Bold;
+
+            UiFactory.Caption(view.transform, "Master volume", new Vector2(-220f, 140f));
+            UiFactory.VolumeSlider(view.transform, new Vector2(110f, 140f), new Vector2(380f, 36f));
+            UiFactory.Caption(view.transform, "Mouse sensitivity", new Vector2(-220f, 70f));
+            UiFactory.SensitivitySlider(view.transform, new Vector2(110f, 70f), new Vector2(380f, 36f));
+
+            UiFactory.Caption(view.transform, "Difficulty", new Vector2(-220f, -10f));
+            Difficulty current = GameSettings.Difficulty;
+            UiFactory.Button(view.transform, current == Difficulty.Easy ? "> EASY <" : "EASY",
+                new Vector2(10f, -10f), new Vector2(180f, 52f), () => SetDifficulty(Difficulty.Easy),
+                current == Difficulty.Easy ? Palette.EmergencyRed : Palette.Slate);
+            UiFactory.Button(view.transform, current == Difficulty.Normal ? "> NORMAL <" : "NORMAL",
+                new Vector2(210f, -10f), new Vector2(180f, 52f), () => SetDifficulty(Difficulty.Normal),
+                current == Difficulty.Normal ? Palette.EmergencyRed : Palette.Slate);
+            UiFactory.Text(view.transform,
+                current == Difficulty.Easy
+                    ? "Easy: the examination shows a checklist of what to look for. Scoring is the same."
+                    : "Normal: no hints - read the observations and decide.",
+                16, new Vector2(680f, 44f), new Vector2(0f, -80f), TextAlignmentOptions.Center, Palette.Warning);
+            UiFactory.Text(view.transform, "Saved automatically. Volume and sensitivity are also in the pause menu.",
+                16, new Vector2(680f, 40f), new Vector2(0f, -130f), TextAlignmentOptions.Center, Palette.LightGrey);
+            UiFactory.Button(view.transform, "BACK", new Vector2(0f, -230f),
                 new Vector2(250f, 56f), ShowHome, Palette.Slate);
         }
 
+        public void SetDifficulty(Difficulty difficulty)
+        {
+            GameSettings.Difficulty = difficulty;
+            ShowSettings();
+        }
         public void StartGame()
         {
-            SceneManager.LoadScene(GameScene);
+            SceneFader.LoadScene(GameScene);
         }
 
         private static void Quit()

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,7 +8,7 @@ namespace GoldenHour
     /// <summary>Builds the simple TMP/uGUI elements used by every Golden Hour screen.</summary>
     internal static class UiFactory
     {
-        public const string VolumePrefKey = "GoldenHour.Volume";
+        public const string VolumePrefKey = GameSettings.VolumeKey;
         private static TMP_FontAsset font;
 
         public static Action ButtonPressed;
@@ -80,7 +80,8 @@ namespace GoldenHour
             component.alignment = alignment;
             component.color = color ?? Palette.White;
             component.textWrappingMode = TextWrappingModes.Normal;
-            component.overflowMode = TextOverflowModes.Ellipsis;
+            // Truncate (not Ellipsis): LiberationSans SDF has no U+2026 glyph, which logs a warning.
+            component.overflowMode = TextOverflowModes.Truncate;
             component.margin = new Vector4(8f, 4f, 8f, 4f);
             component.raycastTarget = false;
             return component;
@@ -109,7 +110,9 @@ namespace GoldenHour
             colors.highlightedColor = Color.white;
             colors.selectedColor = new Color(0.88f, 0.88f, 0.88f, 1f);
             colors.pressedColor = new Color(0.68f, 0.68f, 0.68f, 1f);
+            colors.fadeDuration = 0.08f;
             button.colors = colors;
+            buttonObject.AddComponent<ButtonFeedback>();
 
             TMP_Text text = Text(buttonObject.transform, label, 22,
                 size - new Vector2(18f, 10f), Vector2.zero, TextAlignmentOptions.Center,
@@ -129,7 +132,24 @@ namespace GoldenHour
         /// <summary>Master-volume slider bound to AudioListener.volume and PlayerPrefs.</summary>
         public static Slider VolumeSlider(Transform parent, Vector2 position, Vector2 size)
         {
-            GameObject sliderObject = new GameObject("Master Volume",
+            Slider slider = Slider(parent, "Master Volume", position, size, 0f, 1f, GameSettings.Volume);
+            slider.onValueChanged.AddListener(value => GameSettings.Volume = value);
+            return slider;
+        }
+
+        /// <summary>Mouse-look sensitivity slider (multiplier) saved in PlayerPrefs.</summary>
+        public static Slider SensitivitySlider(Transform parent, Vector2 position, Vector2 size)
+        {
+            Slider slider = Slider(parent, "Mouse Sensitivity", position, size, GameSettings.MinSensitivity,
+                GameSettings.MaxSensitivity, GameSettings.MouseSensitivity);
+            slider.onValueChanged.AddListener(value => GameSettings.MouseSensitivity = value);
+            return slider;
+        }
+
+        public static Slider Slider(Transform parent, string sliderName, Vector2 position, Vector2 size,
+            float min, float max, float value)
+        {
+            GameObject sliderObject = new GameObject(sliderName,
                 typeof(RectTransform), typeof(Slider));
             sliderObject.transform.SetParent(parent, false);
             RectTransform sliderRect = sliderObject.GetComponent<RectTransform>();
@@ -172,20 +192,20 @@ namespace GoldenHour
             slider.fillRect = fill.GetComponent<RectTransform>();
             slider.handleRect = handleRect;
             slider.targetGraphic = handle.GetComponent<Image>();
-            slider.direction = Slider.Direction.LeftToRight;
-            slider.minValue = 0f;
-            slider.maxValue = 1f;
-            slider.SetValueWithoutNotify(PlayerPrefs.GetFloat(VolumePrefKey, 0.8f));
-            slider.onValueChanged.AddListener(value =>
-            {
-                AudioListener.volume = value;
-                PlayerPrefs.SetFloat(VolumePrefKey, value);
-                PlayerPrefs.Save();
-            });
+            slider.direction = UnityEngine.UI.Slider.Direction.LeftToRight;
+            slider.minValue = min;
+            slider.maxValue = max;
+            slider.SetValueWithoutNotify(value);
             return slider;
         }
 
-        private static bool IsLight(Color color)
+        /// <summary>A labelled setting row: caption on the left, control area on the right.</summary>
+        public static TMP_Text Caption(Transform parent, string text, Vector2 position, float width = 240f)
+        {
+            return Text(parent, text, 20, new Vector2(width, 40f), position, TextAlignmentOptions.MidlineRight,
+                Palette.LightGrey);
+        }
+        public static bool IsLight(Color color)
         {
             return color.r * 0.299f + color.g * 0.587f + color.b * 0.114f > 0.62f;
         }
