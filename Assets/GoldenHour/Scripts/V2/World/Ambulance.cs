@@ -26,6 +26,9 @@ namespace GoldenHour
         private Paramedic lead;
         private Paramedic partner;
         private Transform stretcher;
+
+        /// <summary>Optional Blender stretcher model (wheeled trolley); a primitive frame is used otherwise.</summary>
+        public static GameObject StretcherModel { get; set; }
         private bool fetching;
         private bool released;
         private float speed;
@@ -155,6 +158,17 @@ namespace GoldenHour
             Transform frame = new GameObject("Stretcher").transform;
             frame.SetParent(lead.transform, false);
             frame.localPosition = new Vector3(0f, 0.75f, -1.15f);
+            if (StretcherModel != null)
+            {
+                GameObject model = Instantiate(StretcherModel, frame);
+                model.name = "Stretcher Model";
+                model.transform.localPosition = new Vector3(0f, -0.69f, 0f);
+                model.transform.localRotation = Quaternion.identity;
+                foreach (Collider collider in model.GetComponentsInChildren<Collider>()) Destroy(collider);
+                Walker.SetCharacterLayer(model);
+                return frame;
+            }
+
             Material metal = MaterialFactory.Create(new Color32(170, 175, 180, 255), 0.6f, 0.5f);
             Material fabric = MaterialFactory.Create(new Color32(200, 60, 50, 255));
             AccidentEnvironment.Decal(frame, "Bed", Vector3.zero, new Vector3(0.6f, 0.06f, 2f), fabric);

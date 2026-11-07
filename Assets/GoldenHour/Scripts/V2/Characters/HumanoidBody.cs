@@ -73,7 +73,7 @@ namespace GoldenHour
             pivot.SetParent(transform, false);
             Height = 1.75f * scale;
 
-            if (rigPrefab != null && TryBindRig(rigPrefab, style, clothing, scale))
+            if (rigPrefab != null && TryBindRig(rigPrefab, style, clothing, scale, seed))
             {
                 UsesRig = true;
             }
@@ -88,7 +88,7 @@ namespace GoldenHour
             SetState(BodyState.Standing);
         }
 
-        private bool TryBindRig(GameObject rigPrefab, BodyStyle style, Color clothing, float scale)
+        private bool TryBindRig(GameObject rigPrefab, BodyStyle style, Color clothing, float scale, int seed)
         {
             GameObject rig = Instantiate(rigPrefab, pivot);
             rig.name = "Rig";
@@ -100,17 +100,33 @@ namespace GoldenHour
                 if (System.Array.IndexOf(JointNames, child.name) >= 0 && !joints.ContainsKey(child.name)) joints[child.name] = child;
             }
 
-            if (joints.Count < JointNames.Length)
+            if (joints.Count < JointNames.Length || !NormaliseRig(rig.transform, scale))
             {
                 joints.Clear();
                 Destroy(rig);
                 return false;
             }
 
+            System.Random random = new System.Random(seed);
+            Color[] skins =
+            {
+                new Color32(232, 196, 160, 255), new Color32(198, 150, 110, 255), new Color32(150, 104, 70, 255),
+                new Color32(110, 74, 50, 255)
+            };
+            Color skin = skins[random.Next(skins.Length)];
+            Color hair = style == BodyStyle.Elderly ? new Color32(200, 200, 205, 255)
+                : new Color32((byte)(40 + random.Next(80)), (byte)(28 + random.Next(40)), 20, 255);
+            Color trousers = style == BodyStyle.Paramedic ? new Color32(40, 70, 52, 255)
+                : style == BodyStyle.Firefighter ? new Color32(60, 50, 40, 255)
+                : style == BodyStyle.Police ? new Color32(28, 34, 52, 255)
+                : new Color32(48, 52, 62, 255);
             foreach (Renderer part in rig.GetComponentsInChildren<Renderer>(true))
             {
                 string materialName = part.sharedMaterial != null ? part.sharedMaterial.name : string.Empty;
-                if (materialName.Contains("Clothing")) MaterialFactory.Tint(part, clothing);
+                if (materialName.Contains("Clothing")) MaterialFactory.TintShared(part, clothing);
+                else if (materialName.Contains("Skin")) MaterialFactory.TintShared(part, skin);
+                else if (materialName.Contains("Hair")) MaterialFactory.TintShared(part, hair);
+                else if (materialName.Contains("Trousers")) MaterialFactory.TintShared(part, trousers);
                 bool accessory = part.name.Contains("Helmet") || part.name.Contains("HardHat") || part.name.Contains("Vest") ||
                                  part.name.Contains("Cap");
                 if (accessory) part.gameObject.SetActive(AccessoryVisible(part.name, style));
@@ -119,6 +135,58 @@ namespace GoldenHour
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Makes every joint frame axis-aligned with the body pivot (procedural poses assume
+        /// x = right, y = up, z = forward), keeps the meshes where they are, and turns the rig
+        /// to face +Z. Returns false when the imported proportions are implausible.
+        /// </summary>
+        public static bool NormaliseRig(Transform rig, float scale)
+        {
+            Transform parent = rig.parent;
+            Transform head = FindDeep(rig, "Head");
+            Transform hips = FindDeep(rig, "Hips");
+            Transform leftArm = FindDeep(rig, "UpperArm.L");
+            Transform nose = null;
+            foreach (Transform child in rig.GetComponentsInChildren<Transform>(true))
+            {
+                if (child.name.EndsWith("_Nose")) nose = child;
+            }
+
+            if (head == null || hips == null || leftArm == null) return false;
+            Vector3 Local(Transform t) => parent != null ? parent.InverseTransformPoint(t.position) : t.position;
+            Vector3 headPoint = Local(head);
+            Vector3 facing = nose != null ? Local(nose) - headPoint : Vector3.forward;
+            bool facingBack = facing.z < 0f;
+            bool leftOnRight = Local(leftArm).x > Local(hips).x;
+            if (facingBack && leftOnRight) rig.localRotation = Quaternion.Euler(0f, 180f, 0f) * rig.localRotation;
+
+            float hipsHeight = Local(hips).y / Mathf.Max(0.01f, scale);
+            if (hipsHeight < 0.6f || hipsHeight > 1.3f) return false;
+
+            Quaternion target = parent != null ? parent.rotation : Quaternion.identity;
+            foreach (string jointName in JointNames)
+            {
+                Transform joint = FindDeep(rig, jointName);
+                List<Transform> children = new List<Transform>();
+                foreach (Transform child in joint) children.Add(child);
+                foreach (Transform child in children) child.SetParent(null, true);
+                joint.rotation = target;
+                foreach (Transform child in children) child.SetParent(joint, true);
+            }
+
+            return true;
+        }
+
+        private static Transform FindDeep(Transform root, string name)
+        {
+            foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (child.name == name) return child;
+            }
+
+            return null;
         }
 
         private static bool AccessoryVisible(string partName, BodyStyle style)

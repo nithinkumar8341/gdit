@@ -290,7 +290,8 @@ namespace GoldenHour
                 AccidentEnvironment.Decal(root, "Glass Shard", position, new Vector3(0.14f, 0.02f, 0.1f), glassBits);
             }
 
-            Place(root, assets.policeCarPrefab, new Vector3(-2.5f, 0f, -14f), 20f, "Police Car");
+            GameObject police = Place(root, assets.policeCarPrefab, new Vector3(-2.5f, 0f, -14f), 20f, "Police Car");
+            EmergencyLights(police, new Vector3(0f, 0.72f, 2.3f), true);
             Material trunk = MaterialFactory.Create(new Color32(70, 55, 40, 255));
             Material leaves = MaterialFactory.Create(new Color32(40, 70, 45, 255));
             for (int i = 0; i < 10; i++)
@@ -364,7 +365,7 @@ namespace GoldenHour
             AccidentEnvironment.Decal(root, "Playground", new Vector3(-17f, 0.02f, -6f), new Vector3(8f, 0.02f, 8f), MaterialFactory.Create(new Color32(170, 80, 70, 255)));
             AccidentEnvironment.Decal(root, "Playground Circle", new Vector3(-17f, 0.03f, -6f), new Vector3(3f, 0.01f, 3f), paint, PrimitiveType.Cylinder);
 
-            Place(root, assets.fireTruckPrefab, new Vector3(12f, 0f, -20f), -90f, "Fire Engine");
+            EmergencyLights(Place(root, assets.fireTruckPrefab, new Vector3(12f, 0f, -20f), -90f, "Fire Engine"), new Vector3(0f, 1f, 4.15f), false);
             Material metal = MaterialFactory.Create(Palette.Metal, 0.5f, 0.4f);
             Material glow = MaterialFactory.CreateUnlit(Palette.LampGlow, 1.6f);
             Lamp(root, new Vector3(-8f, 0f, -15.5f), false, metal, glow);
@@ -374,6 +375,48 @@ namespace GoldenHour
         }
 
         // -------------------------------------------------------- night and rain
+
+        /// <summary>
+        /// Flashing blue light-bar lamps on a Blender vehicle model (lamps named *_LampL/*_LampR) and, at night,
+        /// a headlight spot beam. One real-time light per vehicle bar keeps the light count low.
+        /// </summary>
+        public static void EmergencyLights(GameObject vehicle, Vector3 localFront, bool night)
+        {
+            if (vehicle == null) return;
+            int index = 0;
+            foreach (Renderer lamp in vehicle.GetComponentsInChildren<Renderer>())
+            {
+                if (!lamp.name.EndsWith("_LampL") && !lamp.name.EndsWith("_LampR")) continue;
+                Light glow = null;
+                if (index == 0)
+                {
+                    glow = new GameObject("Light Bar Glow").AddComponent<Light>();
+                    glow.transform.SetParent(lamp.transform, false);
+                    glow.transform.localPosition = new Vector3(0f, 0.4f, 0f);
+                    glow.type = LightType.Point;
+                    glow.range = night ? 14f : 8f;
+                    glow.color = new Color(0.25f, 0.4f, 1f);
+                    glow.shadows = LightShadows.None;
+                }
+
+                FlashingLight flash = lamp.gameObject.AddComponent<FlashingLight>();
+                flash.Initialize(lamp, new Color(0.2f, 0.35f, 1f), 0.7f, index * 0.5f, glow);
+                index++;
+            }
+
+            if (!night) return;
+            Light beam = new GameObject("Headlight Beam").AddComponent<Light>();
+            beam.transform.SetParent(vehicle.transform, false);
+            beam.transform.localPosition = localFront;
+            beam.transform.localRotation = Quaternion.Euler(8f, 0f, 0f);
+            beam.type = LightType.Spot;
+            beam.spotAngle = 55f;
+            beam.innerSpotAngle = 30f;
+            beam.range = 28f;
+            beam.intensity = 9f;
+            beam.color = new Color(1f, 0.95f, 0.82f);
+            beam.shadows = LightShadows.None;
+        }
 
         public static void ApplyNight(Camera camera)
         {

@@ -4,10 +4,10 @@ Run (background mode, no UI):
   blender.exe --background --factory-startup --python generate_v2_assets.py
 
 Coordinates are written in Unity space: (x = right, up, z = forward), metres.
-The FBX export (forward -Z, up Y, baked space transform) followed by Unity's
-import turns Blender's +Y depth into Unity -Z and Blender +X into Unity -X
-(the v1 kit hinge at Blender depth -0.46 landed on Unity +Z), so to_blender()
-negates x and z to compensate. GoldenHourProjectBuilder validates the result
+The FBX export (forward -Z, up Y, no baked space transform) plus Unity's import
+with "Bake Axis Conversion" maps Blender (x, y, z) to Unity (x, z, y) (measured with
+V2ModelPostprocessor.Dump); V2ModelPostprocessor also folds the root's leftover
+rotation into its children. to_blender() inverts that mapping. GoldenHourProjectBuilder validates the result
 (left arm on -X, nose on +Z) after import.
 
 Rigs are hierarchies of named empties (Hips, Spine, Chest, Neck, Head,
@@ -31,7 +31,7 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 
 def to_blender(v):
     x, up, z = v
-    return (-x, z, up)
+    return (x, z, up)
 
 
 def size_to_blender(v):
@@ -353,7 +353,7 @@ def export_hierarchy(root, filename):
         axis_up="Y",
         apply_unit_scale=True,
         apply_scale_options="FBX_SCALE_ALL",
-        bake_space_transform=True,
+        bake_space_transform=False,
         use_mesh_modifiers=True,
         add_leaf_bones=False,
         bake_anim=False,
@@ -373,12 +373,20 @@ builders = [
     (build_props, "V2Props.fbx"),
 ]
 
-offset = 0.0
-for build, filename in builders:
+for index, (build, filename) in enumerate(builders):
     root = build()
     export_hierarchy(root, filename)
-    root.location = (offset, 30.0, 0.0)
-    offset += 14.0
+    names = [obj.name for obj in [root] + list(root.children_recursive)]
+    if filename.startswith("Rigged"):
+        missing = [joint for joint in ("Hips", "Spine", "Chest", "Neck", "Head", "UpperArm.L", "LowerArm.L", "UpperLeg.R", "LowerLeg.R") if joint not in names]
+        if missing:
+            raise RuntimeError(filename + " is missing joints " + str(missing))
+    if index < len(builders) - 1:
+        # Joint names must stay unique per rig, so each exported hierarchy is removed before the next is built.
+        bpy.ops.object.select_all(action="DESELECT")
+        for obj in [root] + list(root.children_recursive):
+            obj.select_set(True)
+        bpy.ops.object.delete()
 
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(SOURCE_DIR, "GoldenHour_V2.blend"))
 print("GOLDEN_HOUR_V2_ASSETS_OK", len(builders))

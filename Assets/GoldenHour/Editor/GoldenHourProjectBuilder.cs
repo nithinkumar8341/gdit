@@ -102,6 +102,13 @@ namespace GoldenHour.EditorTools
                 Require(AssetDatabase.LoadAssetAtPath<GameObject>(ModelPath + model + ".fbx") != null, "Blender export " + model + ".fbx is missing.");
             }
 
+            foreach (string rigName in new[] { "RiggedHuman", "RiggedChild" }) ValidateRig(rigName);
+            foreach (string vehicle in new[] { "Ambulance", "PoliceCar", "FireTruck", "Bus" }) ValidateVehicle(vehicle);
+            foreach (string model in new[] { "Motorbike", "Stretcher", "V2Props" })
+            {
+                Require(AssetDatabase.LoadAssetAtPath<GameObject>(ModelPath + model + ".fbx") != null, "Blender export " + model + ".fbx is missing.");
+            }
+
             foreach (string clip in AudioClips) LoadClip(clip + ".wav");
 
             Scene game = EditorSceneManager.OpenScene(GameScenePath, OpenSceneMode.Single);
@@ -450,7 +457,8 @@ namespace GoldenHour.EditorTools
             director.outlineMaterial = AssetDatabase.LoadAssetAtPath<Material>(OutlineMaterialPath);
             director.kitPrefab = LoadModel("FirstAidKit");
             director.humanRigPrefab = OptionalModel("RiggedHuman");
-            director.childRigPrefab = OptionalModel("RiggedHuman");
+            director.childRigPrefab = OptionalModel("RiggedChild");
+            director.stretcherPrefab = OptionalModel("Stretcher");
             director.ambulancePrefab = OptionalModel("Ambulance");
             director.environmentAssets.carPrefab = LoadModel("DamagedCar");
             director.environmentAssets.barrierPrefab = LoadModel("RoadBarrier");
@@ -594,6 +602,50 @@ namespace GoldenHour.EditorTools
         {
             if (AssetDatabase.IsValidFolder("Assets/TutorialInfo")) AssetDatabase.DeleteAsset("Assets/TutorialInfo");
             if (File.Exists("Assets/Readme.asset")) AssetDatabase.DeleteAsset("Assets/Readme.asset");
+        }
+
+        private static void ValidateRig(string rigName)
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ModelPath + rigName + ".fbx");
+            Require(prefab != null, "Blender export " + rigName + ".fbx is missing.");
+            GameObject holder = new GameObject("Rig Check");
+            GameObject rig = UnityEngine.Object.Instantiate(prefab, holder.transform);
+            rig.transform.localPosition = Vector3.zero;
+            rig.transform.localRotation = Quaternion.identity;
+            rig.transform.localScale = Vector3.one;
+            foreach (string joint in HumanoidBody.JointNames)
+            {
+                Require(rig.GetComponentsInChildren<Transform>(true).Any(t => t.name == joint), rigName + " is missing joint " + joint);
+            }
+
+            bool normalised = HumanoidBody.NormaliseRig(rig.transform, 1f);
+            Transform Find(string n) => rig.GetComponentsInChildren<Transform>(true).First(t => t.name == n || t.name.EndsWith("_" + n));
+            Vector3 head = Find("Head").position;
+            Vector3 nose = Find("Nose").position;
+            Vector3 armL = Find("UpperArm.L").position;
+            Vector3 hips = Find("Hips").position;
+            Debug.Log(rigName + " rig: normalised=" + normalised + " hips y=" + hips.y.ToString("0.00") + " head y=" + head.y.ToString("0.00") +
+                      " nose dz=" + (nose.z - head.z).ToString("0.00") + " left arm x=" + armL.x.ToString("0.00") +
+                      " renderers=" + rig.GetComponentsInChildren<Renderer>(true).Length);
+            Require(normalised, rigName + " has implausible proportions after import.");
+            Require(nose.z > head.z, rigName + " does not face +Z after normalising.");
+            Require(armL.x < hips.x, rigName + " has its left arm on the right side (mirrored export).");
+            UnityEngine.Object.DestroyImmediate(holder);
+        }
+
+        private static void ValidateVehicle(string vehicle)
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ModelPath + vehicle + ".fbx");
+            Require(prefab != null, "Blender export " + vehicle + ".fbx is missing.");
+            GameObject instance = UnityEngine.Object.Instantiate(prefab);
+            Bounds bounds = new Bounds(instance.transform.position, Vector3.zero);
+            foreach (Renderer part in instance.GetComponentsInChildren<Renderer>()) bounds.Encapsulate(part.bounds);
+            Transform front = instance.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name == vehicle + "_Front");
+            Debug.Log(vehicle + " model: size " + bounds.size.ToString("0.00") + " min y " + bounds.min.y.ToString("0.00") +
+                      (front != null ? " front z " + front.position.z.ToString("0.00") : " (no front marker)"));
+            Require(bounds.size.z > bounds.size.x && Mathf.Abs(bounds.min.y) < 0.1f, vehicle + " should be ground-standing and longest along Z.");
+            Require(front == null || front.position.z > 0f, vehicle + " should face +Z.");
+            UnityEngine.Object.DestroyImmediate(instance);
         }
 
         private static void Require(bool condition, string message)

@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 namespace GoldenHour
 {
@@ -39,6 +39,26 @@ namespace GoldenHour
             Color hdr = new Color(color.r * intensity, color.g * intensity, color.b * intensity, 1f);
             material.color = hdr;
             if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", hdr);
+        }
+
+        private static readonly System.Collections.Generic.Dictionary<(Material, Color32), Material> TintCache =
+            new System.Collections.Generic.Dictionary<(Material, Color32), Material>();
+
+        /// <summary>Tints with a cached material shared by every renderer using the same source and colour (keeps batching).</summary>
+        public static void TintShared(Renderer renderer, Color color)
+        {
+            Material source = renderer.sharedMaterial;
+            if (source == null) return;
+            (Material, Color32) key = (source, (Color32)color);
+            if (!TintCache.TryGetValue(key, out Material tinted) || tinted == null)
+            {
+                tinted = new Material(source) { name = source.name + " (tint)", enableInstancing = true };
+                tinted.color = color;
+                if (tinted.HasProperty("_BaseColor")) tinted.SetColor("_BaseColor", color);
+                TintCache[key] = tinted;
+            }
+
+            renderer.sharedMaterial = tinted;
         }
 
         public static void Tint(Renderer renderer, Color color)
