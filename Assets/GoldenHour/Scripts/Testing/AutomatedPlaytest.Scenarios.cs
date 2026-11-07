@@ -30,11 +30,11 @@ namespace GoldenHour
             Time.timeScale = 1f;
 
             yield return WaitFor(() => d.Phase == IncidentPhase.Intro || d.Phase == IncidentPhase.Briefing, 8f);
+            Check(id + ": opening fly-through cutscene plays", d.Phase == IncidentPhase.Intro && Cutscene.Playing && Cutscene.Current == CutsceneKind.Opening);
             if (d.Phase == IncidentPhase.Intro)
             {
-                yield return new WaitForSeconds(1.5f);
+                yield return new WaitForSeconds(2.5f);
                 if (id == "tutorial" || id == "bus") yield return Screenshot(id + "_00_intro_cutscene");
-                Check(id + ": opening fly-through cutscene plays", d.Phase == IncidentPhase.Intro);
                 Cutscene.Skip();
             }
 
@@ -52,6 +52,16 @@ namespace GoldenHour
             yield return new WaitForSeconds(0.6f);
             Check(id + ": golden-hour clock runs in real time", d.Minute > startMinute, d.Minute.ToString("0.000"));
             yield return Screenshot(id + "_02_scene");
+            GoldenHourAudio sound = d.GetComponent<GoldenHourAudio>();
+            Check(id + ": layered music and weather ambience play", sound != null && sound.MusicPlaying);
+            Check(id + ": first-person hands are visible", Viewmodel.Instance != null && Viewmodel.Instance.HandsShown);
+            if (id == "bus")
+            {
+                Check("bus: stress rises with unstable RED casualties and the clock (drives heartbeat and vignette)",
+                    StressSystem.Instance != null && StressSystem.Evaluate(d) > 0.1f, StressSystem.Evaluate(d).ToString("0.00"));
+            }
+
+            if (id == "highway") yield return PhotoModeTest(d);
 
             if (id == "tutorial") yield return TutorialRealInput(d);
             else d.CollectKit();
@@ -334,9 +344,33 @@ namespace GoldenHour
             }
         }
 
+        private IEnumerator PhotoModeTest(IncidentDirector d)
+        {
+            PhotoMode photo = PhotoMode.Instance;
+            Check("highway: photo mode component present", photo != null);
+            if (photo == null) yield break;
+            photo.Enter();
+            yield return null;
+            float minute = d.Minute;
+            Check("highway: F10 photo mode freezes time and hides the HUD", photo.Active && Time.timeScale == 0f && !Viewmodel.Instance.HandsShown);
+            yield return new WaitForSecondsRealtime(0.4f);
+            Check("highway: golden-hour clock is paused in photo mode", Mathf.Approximately(minute, d.Minute));
+            photo.Capture();
+            yield return new WaitForSecondsRealtime(0.5f);
+            Check("highway: photo mode saves a PNG", photo.LastPhotoPath != null && File.Exists(photo.LastPhotoPath), photo.LastPhotoPath);
+            photo.Exit();
+            yield return null;
+            Check("highway: leaving photo mode restores play", !photo.Active && Time.timeScale > 0f && Viewmodel.Instance.HandsShown);
+        }
+
         private IEnumerator RecoveryMinigame(IncidentDirector d, Casualty casualty)
         {
             d.InstantActions = false;
+            Vector3 focus = casualty.FocusPoint;
+            Vector3 stand = focus + (casualty.transform.right * 1.3f);
+            stand.y = 0f;
+            d.player.Teleport(stand, Quaternion.LookRotation(focus - stand).eulerAngles.y, 30f);
+            d.player.LookAt(focus);
             float minuteBefore = d.Minute;
             d.RequestTreatment(casualty, Treatment.RecoveryPosition);
             yield return null;
@@ -365,6 +399,11 @@ namespace GoldenHour
         {
             d.InstantActions = false;
             Time.timeScale = 1f;
+            Vector3 focus = casualty.FocusPoint;
+            Vector3 stand = focus + (casualty.transform.right * 1.3f);
+            stand.y = 0f;
+            d.player.Teleport(stand, Quaternion.LookRotation(focus - stand).eulerAngles.y, 30f);
+            d.player.LookAt(focus);
             d.RequestTreatment(casualty, Treatment.Cpr);
             yield return null;
             Check("building: CPR opens the rhythm minigame with a metronome", FirstAidMinigame.Kind == MinigameKind.Cpr);

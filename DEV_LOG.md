@@ -44,3 +44,33 @@
   - **CPR:** press Space in rhythm with a 110 bpm metronome; the rate is measured against 100-120 per minute over 30 compressions. The panel shows the simplification note and states that CPR is deprioritised in mass-casualty triage. CPR is never scored.
   - **Already in place from M2:** hold-to-apply pressure dressing, blanket, airway, the gloves-first penalty, breathing motion, restless/limp states, barks. No gore.
   - **Verification:** player autotest 226/226 checks pass (all four scenarios end to end: exact score tally, deterioration/death, retriage, handover, minigames with simulated input), 0 errors or exceptions. Edit-mode tests 26/26.
+- **M4 (characters and art):** `Blender/generate_v2_assets.py` (Blender 5.2, background mode) exports nine FBX models. Blender exited 0 and printed `GOLDEN_HOUR_V2_ASSETS_OK 9`. The models are:
+  - `RiggedHuman` and `RiggedChild`;
+  - `Ambulance`, `PoliceCar`, `FireTruck`, `Bus` (on its side) and `Motorbike` (fallen);
+  - `Stretcher` and `V2Props`.
+  - **Armature decision:** the rigs are hierarchies of named empties (Hips, Spine, Chest, Neck, Head, UpperArm/LowerArm/UpperLeg/LowerLeg .L/.R) with rigid low-poly segments. They are not skinned armatures, and **animation is procedural in Unity**: breathing, restless and limp states, walking, sitting, kneeling, recovery roll and stretcher carry. No animation clips are exported.
+  - **Axis problems found by the new import validation:**
+    - Blender's `bake_space_transform` distorted the nested empties. Export now runs without it, and Unity's `bakeAxisConversion` is set by `V2ModelPostprocessor`.
+    - The postprocessor also folds the leftover root rotation into the children.
+    - The measured mapping is Unity (x, y, z) = Blender (x, z, y).
+  - **Validation (`ValidateProject`):** both rigs have all joints, face +Z, have the left arm on −X, hips at 0.95 m (adult) and 0.87 m (child), and head at 1.69 m and 1.56 m. All vehicles are ground-standing, longest along Z and front on +Z.
+  - `HumanoidBody.NormaliseRig` makes the joint frames axis-aligned at runtime. Rig parts are tinted with cached shared materials (seeded skin, hair, trousers).
+  - The stretcher model is used by the ambulance crews. Blender police cars and fire engines get flashing light bars, and at night a headlight beam (spot light).
+  - Fire, sparks, rain, fog and night lighting carry over from M2.
+- **M5 (immersion):**
+  - **Hands and movement:** first-person forearms and hands. They are skin-coloured, then blue nitrile once gloves are on. They hold the dressing, blanket or tag during actions, sway with movement and tremble with stress. Reduce-motion turns sway and tremor off. Kneel and head bob were already in place.
+  - **Stress:** `StressSystem` drives heartbeat and breathing audio, music tension and a vignette pulse from unstable RED casualties, the clock and danger zones. The Stress effects setting turns it off.
+  - **Audio:** music layers and rain/wind start per scenario. 3D sirens and voices were already in place.
+  - **Cutscenes:** an opening fly-in and an ending orbit, filmed by a separate camera with letterbox bars and captions. Both are skippable.
+  - **Photo mode (F10):** time scale 0 and the clock stops, HUD and hands are hidden, a free camera is limited to 12 m, and Space saves a PNG.
+  - **Layout fixes from screenshots:** stacked score toasts, minigame panel position and title height, subtitle and tip widths.
+- **M6 (debrief and analytics):** the debrief has five tabs, and the disclaimer appears on every tab.
+  - **Summary:** score, stars, outcomes, personalised feedback.
+  - **Timeline:** key events and decision times.
+  - **Casualties:** first tag against START truth, the START step in plain words, outcome, decision time, retags, aid.
+  - **Map:** a 64×64 movement heatmap with path samples every 0.5 s, plus casualty and hazard markers.
+  - **Stats:** score by category, first-tag accuracy, under- and over-triage, time, difficulty model.
+  - **Next Scenario** is enabled only once the next scenario is unlocked.
+  - Run JSON, profile, campaign unlocks and adaptive difficulty were already in place from M1 and M2.
+- **M7 (UX and accessibility):** everything required was delivered during M2 and is verified by the autotest: live 3D menu, campaign, loading tips, credits, all settings (presets, resolution, rebinding, subtitles, colour-blind tags with shapes, stripes and numbers, text size, reduce motion, three volume sliders, sensitivity), gamepad (`GamepadSelector` plus gamepad bindings), and pause.
+- **Verification:** player autotest **256/256** checks pass, with 0 errors or exceptions logged. New checks cover the intro cutscene, music, hands, stress, photo mode, the CPR rate, the recovery minigame and the debrief tabs. One earlier run failed only the menu hover check: the scale measured exactly 1.020 against >1.02 after 0.2 s. That was a timing margin, not a defect; the test now waits 0.4 s.

@@ -48,6 +48,7 @@ namespace GoldenHour
         public GameObject humanRigPrefab;
         public GameObject childRigPrefab;
         public GameObject ambulancePrefab;
+        public GameObject stretcherPrefab;
         public EnvironmentAssets environmentAssets = new EnvironmentAssets();
 
         private readonly List<Casualty> casualties = new List<Casualty>();
@@ -133,6 +134,8 @@ namespace GoldenHour
             UiFactory.ButtonPressed = audioManager != null ? audioManager.PlayButton : (Action)null;
             ButtonFeedback.Hovered = audioManager != null ? audioManager.PlayHover : (Action)null;
             if (player != null && audioManager != null) player.Stepped += audioManager.PlayFootstep;
+            if (GetComponent<StressSystem>() == null) gameObject.AddComponent<StressSystem>();
+            if (GetComponent<PhotoMode>() == null) gameObject.AddComponent<PhotoMode>();
             SpeechBark.Spoken += OnSpeech;
 
             ConfigureDifficulty();
@@ -146,6 +149,12 @@ namespace GoldenHour
             if (player != null) player.Teleport(Scenario.playerStart, Scenario.playerYaw, 4f);
 
             GraphicsApplier.Apply();
+            if (audioManager != null)
+            {
+                audioManager.StartMusic();
+                audioManager.StartWeather(Scenario.rain, Scenario.environment != EnvironmentKind.TrainingYard);
+            }
+
             Canvas canvas = UiFactory.CreateCanvas("Incident UI");
             canvas.gameObject.AddComponent<GamepadSelector>();
             hud = new IncidentHud(canvas.transform);
@@ -286,6 +295,9 @@ namespace GoldenHour
             bool minigameWasActive = FirstAidMinigame.Active;
             FirstAidMinigame.Tick();
             if (Phase == IncidentPhase.Intro) UpdateIntro();
+            if (Phase == IncidentPhase.Ending && Cutscene.Playing &&
+                (GameInput.Pressed(GameInput.Pause) || GameInput.Pressed(GameInput.Interact) || GameInput.Pressed(GameInput.Primary))) Cutscene.Skip();
+            if (PhotoMode.Instance != null && (PhotoMode.Instance.Active || PhotoMode.Instance.ExitFrame == Time.frameCount)) return;
             if (Phase != IncidentPhase.Safety && Phase != IncidentPhase.Response) return;
 
             if (GameInput.Pressed(GameInput.Pause) && !minigameWasActive)
@@ -386,6 +398,7 @@ namespace GoldenHour
         {
             if (spawnedWaves.Contains(index)) return ambulances.Find(a => a.Number == index + 1);
             spawnedWaves.Add(index);
+            Ambulance.StretcherModel = stretcherPrefab;
             Ambulance ambulance = new GameObject("Ambulance").AddComponent<Ambulance>();
             Vector3 road = Scenario.ambulanceBay - Scenario.ambulanceSpawn;
             road.y = 0f;
@@ -452,13 +465,17 @@ namespace GoldenHour
                 }
             }
 
+            InDanger = warning.Length > 0;
             hud.SetDanger(warning);
         }
+
+        /// <summary>True while the player stands inside an unmarked or dangerous hazard radius.</summary>
+        public bool InDanger { get; private set; }
 
         private void SamplePath()
         {
             if (player == null || Time.realtimeSinceStartup < nextPathSample) return;
-            nextPathSample = Time.realtimeSinceStartup + 1f;
+            nextPathSample = Time.realtimeSinceStartup + 0.5f;
             run.path.Add(new PathSample { minute = Minute, x = player.transform.position.x, z = player.transform.position.z });
         }
 
@@ -688,6 +705,7 @@ namespace GoldenHour
             actionProgress = 0f;
             actionHold = hold;
             actionDone = done;
+            if (Viewmodel.Instance != null) Viewmodel.Instance.Hold(Viewmodel.ItemFor(label));
         }
 
         private void UpdateAction()
@@ -710,6 +728,7 @@ namespace GoldenHour
                 Action done = actionDone;
                 actionDone = null;
                 hud.SetProgress(string.Empty, 0f, false);
+                if (Viewmodel.Instance != null) Viewmodel.Instance.Hold(null);
                 done?.Invoke();
             }
         }
@@ -903,8 +922,13 @@ namespace GoldenHour
             SceneFader.LoadScene(MainMenuScene);
         }
 
+        /// <summary>True when a next scenario exists and the saved profile has unlocked it.</summary>
+        public bool HasNextScenario => Scenario != null && !string.IsNullOrEmpty(Scenario.nextScenarioId) &&
+                                       ProfileStore.Load().Get(Scenario.nextScenarioId).unlocked;
+
         public void PlayNextScenario()
         {
+            if (!HasNextScenario) return;
             if (!string.IsNullOrEmpty(Scenario.nextScenarioId)) Session.ScenarioId = Scenario.nextScenarioId;
             RestartScenario();
         }

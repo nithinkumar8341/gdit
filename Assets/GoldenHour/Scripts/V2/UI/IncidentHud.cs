@@ -86,7 +86,7 @@ namespace GoldenHour
                 new Color32(170, 240, 190, 255));
             radioPanel.SetActive(false);
 
-            subtitle = Bottom(176f, 19, new Vector2(900f, 40f), new Color32(255, 246, 220, 255), out subtitleBacking);
+            subtitle = Bottom(176f, 19, new Vector2(800f, 40f), new Color32(255, 246, 220, 255), out subtitleBacking);
             prompt = Bottom(126f, 23, new Vector2(820f, 44f), Palette.White, out promptBacking);
             prompt.fontStyle = FontStyles.Bold;
             status = Bottom(80f, 18, new Vector2(1040f, 40f), Palette.Warning, out statusBacking);
@@ -99,9 +99,9 @@ namespace GoldenHour
             dangerBacking.GetComponent<Image>().color = new Color32(80, 10, 14, 220);
             dangerBacking.SetActive(false);
 
-            tipPanel = UiFactory.Panel(root.transform, "Tip", new Vector2(780f, 96f), new Vector2(0f, -220f), new Color32(120, 26, 32, 228));
+            tipPanel = UiFactory.Panel(root.transform, "Tip", new Vector2(700f, 96f), new Vector2(0f, -220f), new Color32(120, 26, 32, 228));
             tipPanel.GetComponent<Image>().raycastTarget = false;
-            tip = UiFactory.Text(tipPanel.transform, string.Empty, 18, new Vector2(760f, 90f), Vector2.zero, TextAlignmentOptions.Center);
+            tip = UiFactory.Text(tipPanel.transform, string.Empty, 18, new Vector2(670f, 90f), Vector2.zero, TextAlignmentOptions.Center);
             tipPanel.SetActive(false);
 
             Canvas overlay = UiFactory.CreateCanvas("Incident Overlay");
@@ -137,6 +137,17 @@ namespace GoldenHour
         }
 
         public void SetVisible(bool visible) => root.SetActive(visible);
+
+        /// <summary>Removes pending score toasts (used when the debrief opens).</summary>
+        public void ClearToasts()
+        {
+            foreach ((TMP_Text text, float end) toast in toasts)
+            {
+                if (toast.text != null) Object.Destroy(toast.text.gameObject);
+            }
+
+            toasts.Clear();
+        }
         public void SetObjectives(string text) => objectives.text = text;
         public void SetClock(string text) => clock.text = text;
         public void SetSupplies(string text) => supplies.text = text;
@@ -196,8 +207,15 @@ namespace GoldenHour
         {
             Color color = points >= 0 ? new Color32(127, 224, 166, 255) : new Color32(255, 138, 138, 255);
             TMP_Text text = UiFactory.Text(toastRoot, (points >= 0 ? "+" : "") + points + "  " + reason, 20, new Vector2(700f, 34f),
-                new Vector2(0f, 60f + toasts.Count * 30f), TextAlignmentOptions.Center, color);
+                new Vector2(0f, 60f), TextAlignmentOptions.Center, color);
             text.fontStyle = FontStyles.Bold;
+            text.outlineWidth = 0.18f;
+            text.outlineColor = new Color32(10, 14, 18, 255);
+            if (toasts.Count >= 5)
+            {
+                if (toasts[0].text != null) Object.Destroy(toasts[0].text.gameObject);
+                toasts.RemoveAt(0);
+            }
             toasts.Add((text, Time.time + 2.6f));
         }
 
@@ -225,7 +243,10 @@ namespace GoldenHour
             {
                 if (toasts[i].text == null) continue;
                 RectTransform rect = toasts[i].text.rectTransform;
-                rect.anchoredPosition += new Vector2(0f, Time.deltaTime * 24f);
+                float slot = 60f + (toasts.Count - 1 - i) * 34f;
+                float age = Mathf.Clamp01(1f - (toasts[i].end - Time.time) / 2.6f);
+                Vector2 target = new Vector2(0f, slot + age * 12f);
+                rect.anchoredPosition = Vector2.Lerp(rect.anchoredPosition, target, Mathf.Clamp01(Time.unscaledDeltaTime * 12f));
                 if (Time.time > toasts[i].end)
                 {
                     Object.Destroy(toasts[i].text.gameObject);

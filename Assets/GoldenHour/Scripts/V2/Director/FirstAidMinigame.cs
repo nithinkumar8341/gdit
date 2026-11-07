@@ -206,11 +206,11 @@ namespace GoldenHour
 
         private static void BuildUi(Transform overlay)
         {
-            root = UiFactory.Panel(overlay, "First Aid Minigame", new Vector2(760f, 220f), new Vector2(0f, -330f), new Color32(18, 24, 31, 235));
+            root = UiFactory.Panel(overlay, "First Aid Minigame", new Vector2(760f, 200f), new Vector2(0f, 250f), new Color32(18, 24, 31, 235));
             Outline outline = root.AddComponent<Outline>();
             outline.effectColor = Palette.EmergencyRed;
             outline.effectDistance = new Vector2(2f, -2f);
-            titleText = UiFactory.Text(root.transform, string.Empty, 24, new Vector2(720f, 34f), new Vector2(0f, 80f), TextAlignmentOptions.Center);
+            titleText = UiFactory.Text(root.transform, string.Empty, 24, new Vector2(720f, 46f), new Vector2(0f, 74f), TextAlignmentOptions.Center);
             titleText.fontStyle = FontStyles.Bold;
             bodyText = UiFactory.Text(root.transform, string.Empty, 17, new Vector2(720f, 84f), new Vector2(0f, -62f), TextAlignmentOptions.Top);
             GameObject bar = UiFactory.Panel(root.transform, "Bar", new Vector2(640f, 26f), new Vector2(0f, 36f), new Color32(52, 60, 70, 255));

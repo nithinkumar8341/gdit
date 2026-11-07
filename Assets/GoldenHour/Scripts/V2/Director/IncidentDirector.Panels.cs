@@ -377,6 +377,7 @@ namespace GoldenHour
         public void ShowDebrief()
         {
             Phase = IncidentPhase.Debrief;
+            hud.ClearToasts();
             if (player != null) player.SetControlsEnabled(false);
             DebriefScreen.Show(this, modal);
         }

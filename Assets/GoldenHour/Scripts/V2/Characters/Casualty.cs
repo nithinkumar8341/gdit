@@ -97,12 +97,16 @@ namespace GoldenHour
             if (IncidentDirector.Instance != null) IncidentDirector.Instance.OpenExamination(this);
         }
 
+        /// <summary>Where the casualty was found (used by the debrief map after transport).</summary>
+        public Vector3 SpawnPosition { get; private set; }
+
         public void Initialize(CasualtyPlacement placement, int seed, float deteriorationScale, GameObject rigPrefab)
         {
             random = new System.Random(seed);
             Sim = new CasualtySim(placement.profile, seed, deteriorationScale);
             gameObject.name = Profile.casualtyId + " - " + Profile.displayName;
             transform.SetPositionAndRotation(placement.position, Quaternion.Euler(0f, placement.yaw, 0f));
+            SpawnPosition = placement.position;
 
             BodyStyle style = Profile.variant == BodyVariant.Child ? BodyStyle.Child
                 : Profile.variant == BodyVariant.Motorcyclist ? BodyStyle.Motorcyclist

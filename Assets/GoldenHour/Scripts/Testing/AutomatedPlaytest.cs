@@ -113,7 +113,7 @@ namespace GoldenHour
             if (feedback != null)
             {
                 feedback.OnPointerEnter(null);
-                yield return new WaitForSecondsRealtime(0.2f);
+                yield return new WaitForSecondsRealtime(0.4f);
                 float hover = feedback.transform.localScale.x;
                 feedback.OnPointerExit(null);
                 Check("Buttons react to hover", hover > 1.02f, hover.ToString("0.000"));
