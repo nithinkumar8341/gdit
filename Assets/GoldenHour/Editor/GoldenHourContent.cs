@@ -17,22 +17,68 @@ namespace GoldenHour.EditorTools
 
         private static readonly string[] Ids = { "tutorial", "highway", "bus", "building" };
 
-        public static ScenarioCatalog CreateAll()
+        /// <summary>
+        /// When false (Build Project), existing casualty and scenario assets are left exactly as they are, so
+        /// Inspector edits survive; only missing assets are created from the defaults below. When true
+        /// (menu "GoldenHour/Regenerate Content"), every asset is reset to these defaults.
+        /// </summary>
+        private static bool overwrite;
+
+        /// <summary>Assets that already existed this run, keyed by the throwaway instance the builders filled in.</summary>
+        private static readonly Dictionary<Object, Object> Existing = new Dictionary<Object, Object>();
+
+        /// <summary>Number of assets created or overwritten in the last run (logged for evidence).</summary>
+        public static int Written { get; private set; }
+
+        /// <summary>Non-destructive: creates missing content only (used by Build Project).</summary>
+        public static ScenarioCatalog CreateAll() => Generate(false);
+
+        [MenuItem("GoldenHour/Regenerate Content (overwrites scenario and casualty assets)")]
+        public static void RegenerateContent()
         {
+            Generate(true);
+            Debug.Log("Golden Hour content regenerated from defaults (" + Written + " assets written).");
+        }
+
+        private static ScenarioCatalog Generate(bool overwriteExisting)
+        {
+            overwrite = overwriteExisting;
+            Existing.Clear();
+            Written = 0;
             Directory.CreateDirectory(Root + "Casualties");
             Directory.CreateDirectory(Root + "Scenarios");
             AssetDatabase.Refresh();
             ScenarioCatalog catalog = AssetDatabase.LoadAssetAtPath<ScenarioCatalog>(CatalogPath);
-            if (catalog == null)
+            bool newCatalog = catalog == null;
+            if (newCatalog)
             {
                 catalog = ScriptableObject.CreateInstance<ScenarioCatalog>();
                 AssetDatabase.CreateAsset(catalog, CatalogPath);
             }
 
-            catalog.scenarios = new List<ScenarioData> { Tutorial(), Highway(), Bus(), Building() };
-            EditorUtility.SetDirty(catalog);
+            List<ScenarioData> scenarios = new List<ScenarioData> { Tutorial(), Highway(), Bus(), Building() };
+            if (overwrite || newCatalog || catalog.scenarios == null || catalog.scenarios.Count == 0)
+            {
+                catalog.scenarios = scenarios;
+                EditorUtility.SetDirty(catalog);
+                Written++;
+            }
+
+            foreach (Object transient in Existing.Keys) Object.DestroyImmediate(transient);
+            Existing.Clear();
+            overwrite = false;
             AssetDatabase.SaveAssets();
+            Debug.Log("Golden Hour content: " + Written + " asset(s) created or overwritten" + (overwriteExisting ? " (regenerate)." : "; existing assets preserved."));
             return catalog;
+        }
+
+        /// <summary>Returns the saved asset for a builder-filled instance (the existing asset when it was preserved).</summary>
+        private static T Commit<T>(T built) where T : Object
+        {
+            if (Existing.TryGetValue(built, out Object asset)) return (T)asset;
+            EditorUtility.SetDirty(built);
+            Written++;
+            return built;
         }
 
         public static ScenarioCatalog LoadCatalog() => AssetDatabase.LoadAssetAtPath<ScenarioCatalog>(CatalogPath);
@@ -70,6 +116,12 @@ namespace GoldenHour.EditorTools
             {
                 profile = ScriptableObject.CreateInstance<CasualtyProfile>();
                 AssetDatabase.CreateAsset(profile, path);
+            }
+            else if (!overwrite)
+            {
+                CasualtyProfile transient = ScriptableObject.CreateInstance<CasualtyProfile>();
+                Existing[transient] = profile;
+                profile = transient;
             }
 
             profile.casualtyId = id;
@@ -150,6 +202,12 @@ namespace GoldenHour.EditorTools
                 scenario = ScriptableObject.CreateInstance<ScenarioData>();
                 AssetDatabase.CreateAsset(scenario, path);
             }
+            else if (!overwrite)
+            {
+                ScenarioData transient = ScriptableObject.CreateInstance<ScenarioData>();
+                Existing[transient] = scenario;
+                scenario = transient;
+            }
 
             scenario.scenarioId = id;
             scenario.casualties = new List<CasualtyPlacement>();
@@ -164,7 +222,7 @@ namespace GoldenHour.EditorTools
 
         private static void Place(ScenarioData scenario, CasualtyProfile profile, float x, float z, float yaw)
         {
-            scenario.casualties.Add(new CasualtyPlacement { profile = profile, position = new Vector3(x, 0f, z), yaw = yaw });
+            scenario.casualties.Add(new CasualtyPlacement { profile = Commit(profile), position = new Vector3(x, 0f, z), yaw = yaw });
         }
 
         private static void Hazard(ScenarioData scenario, HazardType type, float x, float z, float radius, float yaw = 0f)
@@ -250,8 +308,7 @@ namespace GoldenHour.EditorTools
                 "When the ambulance arrives, talk to the paramedic ({Interact}) and hand over the most urgent casualty first."
             };
             s.loadingTips = CommonTips;
-            EditorUtility.SetDirty(s);
-            return s;
+            return Commit(s);
         }
 
         // --------------------------------------------------------------- highway
@@ -316,8 +373,7 @@ namespace GoldenHour.EditorTools
             Cue(s, 7f, "Police: the northbound carriageway is closed behind you.");
             Cue(s, 20f, "Incident command: fire service four minutes out. Keep everyone clear of the fire.");
             s.loadingTips = CommonTips;
-            EditorUtility.SetDirty(s);
-            return s;
+            return Commit(s);
         }
 
         // ------------------------------------------------------------------- bus
@@ -388,8 +444,7 @@ namespace GoldenHour.EditorTools
             Cue(s, 12f, "Incident command: more units are coming but the road is flooding. Use the green zone for anyone who can walk.");
             Cue(s, 26f, "Fire service: we're on scene at the bus fire. Keep casualties clear of the rear.");
             s.loadingTips = CommonTips;
-            EditorUtility.SetDirty(s);
-            return s;
+            return Commit(s);
         }
 
         // -------------------------------------------------------------- building
@@ -463,8 +518,7 @@ namespace GoldenHour.EditorTools
             Cue(s, 10f, "Incident command: the electricity company is isolating the power line. Keep everyone clear.");
             Cue(s, 24f, "Incident command: urban search and rescue is ten minutes out for anyone trapped.");
             s.loadingTips = CommonTips;
-            EditorUtility.SetDirty(s);
-            return s;
+            return Commit(s);
         }
     }
 }

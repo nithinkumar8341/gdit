@@ -46,6 +46,50 @@ namespace GoldenHour.EditorTools
         };
 
         [MenuItem("GoldenHour/Build Project")]
+        /// <summary>
+        /// Evidence for the non-destructive content rule: edits a casualty and a scenario field as a designer would in the
+        /// Inspector, runs the Build Project content step, checks both edits survived, then restores the originals.
+        /// Batch: -executeMethod GoldenHour.EditorTools.GoldenHourProjectBuilder.CheckContentPreservation
+        /// </summary>
+        public static void CheckContentPreservation()
+        {
+            GoldenHourContent.CreateAll();
+            CasualtyProfile profile = AssetDatabase.LoadAssetAtPath<CasualtyProfile>(GoldenHourContent.Root + "Casualties/T01.asset");
+            ScenarioData scenario = AssetDatabase.LoadAssetAtPath<ScenarioData>(GoldenHourContent.Root + "Scenarios/highway.asset");
+            Require(profile != null && scenario != null, "Content assets are missing.");
+            string originalNote = profile.aidNote;
+            float originalDeath = profile.deathMinute;
+            string originalBriefing = scenario.briefing;
+            int originalDressings = scenario.dressings;
+            try
+            {
+                profile.aidNote = "INSPECTOR EDIT MARKER";
+                profile.deathMinute = 33.3f;
+                scenario.briefing = "INSPECTOR EDIT MARKER";
+                scenario.dressings = 7;
+                EditorUtility.SetDirty(profile);
+                EditorUtility.SetDirty(scenario);
+                AssetDatabase.SaveAssets();
+                GoldenHourContent.CreateAll();
+                profile = AssetDatabase.LoadAssetAtPath<CasualtyProfile>(GoldenHourContent.Root + "Casualties/T01.asset");
+                scenario = AssetDatabase.LoadAssetAtPath<ScenarioData>(GoldenHourContent.Root + "Scenarios/highway.asset");
+                bool kept = profile.aidNote == "INSPECTOR EDIT MARKER" && Mathf.Approximately(profile.deathMinute, 33.3f) &&
+                            scenario.briefing == "INSPECTOR EDIT MARKER" && scenario.dressings == 7 && GoldenHourContent.Written == 0;
+                Require(kept, "Build Project overwrote Inspector edits (written " + GoldenHourContent.Written + ").");
+                Debug.Log("Content preservation check passed: Inspector edits to T01 and highway survived Build Project; 0 assets rewritten.");
+            }
+            finally
+            {
+                profile.aidNote = originalNote;
+                profile.deathMinute = originalDeath;
+                scenario.briefing = originalBriefing;
+                scenario.dressings = originalDressings;
+                EditorUtility.SetDirty(profile);
+                EditorUtility.SetDirty(scenario);
+                AssetDatabase.SaveAssets();
+            }
+        }
+
         public static void BuildProject()
         {
             EnsureDirectories();
@@ -97,7 +141,7 @@ namespace GoldenHour.EditorTools
             Require(EditorBuildSettings.scenes.Length >= 2 && EditorBuildSettings.scenes[0].path == MenuScenePath &&
                     EditorBuildSettings.scenes.Any(s => s.enabled && s.path == GameScenePath),
                 "Build Settings must list MainMenu first and the gameplay scene.");
-            foreach (string model in new[] { "LowPolyMannequin", "FirstAidKit", "RoadBarrier", "AccidentProps", "DamagedCar" })
+            foreach (string model in new[] { "FirstAidKit", "RoadBarrier", "AccidentProps", "DamagedCar" })
             {
                 Require(AssetDatabase.LoadAssetAtPath<GameObject>(ModelPath + model + ".fbx") != null, "Blender export " + model + ".fbx is missing.");
             }
@@ -411,13 +455,12 @@ namespace GoldenHour.EditorTools
             DeleteNamedObject("Patient_Test");
             DeleteNamedObject("TestGround");
             DeleteNamedObject("GoldenHourUI");
-            RemoveComponentIfPresent<global::PlayerController>(playerObject);
-            RemoveComponentIfPresent<global::PlayerLook>(playerObject);
-            RemoveComponentIfPresent<global::PlayerInteraction>(playerObject);
+            // Legacy v1 components (scripts removed in the cleanup phase) leave missing-script entries; strip them.
+            GameObjectUtility.RemoveMonoBehavioursWithMissingScript(playerObject);
 
             Camera camera = playerObject.GetComponentInChildren<Camera>();
             Require(camera != null, "The existing Player Camera child is required.");
-            RemoveComponentIfPresent<global::PlayerLook>(camera.gameObject);
+            GameObjectUtility.RemoveMonoBehavioursWithMissingScript(camera.gameObject);
             camera.transform.localPosition = new Vector3(0f, FirstPersonPlayer.StandingEyeHeight, 0f);
             camera.transform.localRotation = Quaternion.identity;
             camera.nearClipPlane = 0.05f;
@@ -590,12 +633,6 @@ namespace GoldenHour.EditorTools
         {
             GameObject target = GameObject.Find(objectName);
             if (target != null) UnityEngine.Object.DestroyImmediate(target);
-        }
-
-        private static void RemoveComponentIfPresent<T>(GameObject target) where T : Component
-        {
-            T component = target.GetComponent<T>();
-            if (component != null) UnityEngine.Object.DestroyImmediate(component);
         }
 
         private static void DeleteTemplateLeftovers()

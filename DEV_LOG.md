@@ -114,3 +114,21 @@
     - The autotest now drives its own virtual keyboard, disables all real keyboard, mouse, gamepad and joystick devices, and writes an INCOMPLETE results file if the player is closed early.
   - **Checks added (257 → 279):** hazard total, tip/radio separation, toast layout, handover and aid objectives per scenario, readable treatment names per scenario, input isolation. A unit test for treatment names was also added (26 → 27).
   - **Results:** 0 compiler errors or warnings; unit tests 27/27; Validate Project passed; autotest 279/279.
+- **Phase 2 (intent):** Non-destructive content generation (`GoldenHourContent`: create missing assets only; explicit "GoldenHour/Regenerate Content" menu) with a builder check that an Inspector edit survives Build Project. Verified removal of unreferenced v1 items (`Assets/Scripts/**`, `Assets/UI/PatientUIController.cs`, the GameManager/ScoreManager components, `GoldenHour_Prototype.unity`, TMP Examples & Extras, `LowPolyMannequin.fbx`, `Palette` TriageCategory methods). CLAUDE.md and docs updated to v2; v1 docs archived.
+- **Phase 2 (done):**
+  - **Content is non-destructive.** `GoldenHourContent.CreateAll` builds each casualty and scenario in memory. It writes the asset only when no asset exists yet. The campaign catalog list is filled only when it is new or empty. `GoldenHour/Regenerate Content (overwrites scenario and casualty assets)` resets the assets on purpose.
+  - **Evidence:** `GoldenHourProjectBuilder.CheckContentPreservation` edits T01 (aid note, death minute) and the highway scenario (briefing, dressings), runs Build Project's content step, and requires the edits to survive with 0 assets rewritten. Log: "Content preservation check passed". The ScriptableObject `git diff` was empty after Build Project.
+  - **Removed after a search showed no references** (no GUID references from scenes, prefabs, assets or TMP resources; no type references outside their own folder):
+    - `Assets/Scripts/GameFlow/GameManaer.cs`, `Scoring/ScoreManager.cs`;
+    - `Player/PlayerController.cs`, `PlayerLook.cs`, `PlayerInteraction.cs`;
+    - `Patients/PatientController.cs`, `PatientData.cs`, `PatientFactory.cs`, `PatientInteractable.cs`, `PatientProfileTester.cs`;
+    - `Triage/STARTTriageEvaluator.cs`, `TriageCategory.cs`;
+    - `Testing/GoldenHourIntegrationTester.cs`, `GoldenHourLogicTester.cs`; then the empty `Assets/Scripts` folder;
+    - `Assets/UI/PatientUIController.cs`;
+    - `Assets/GoldenHour_Prototype.unity` (not in Build Settings);
+    - `Assets/TextMesh Pro/Examples & Extras`;
+    - `Assets/GoldenHour/Blender/Exports/LowPolyMannequin.fbx` (v1 mannequin, replaced by RiggedHuman);
+    - `Palette.ForCategory` and `Palette.Label(TriageCategory)` (only used by the v1 scripts).
+  - **Scene clean-up:** the builder used to strip v1 components by type. It now removes missing-script components from Player and the camera, and the scenes no longer carry the GameManager or ScoreManager components.
+  - **Docs:** CLAUDE.md now describes the v2 requirements. PROJECT_ANALYSIS.md and CLAUDE_CODE_HANDOFF.md moved to `Docs/history/`. LowPolyMannequin was removed from ASSET_CREDITS. AUDIT_FINAL.md is committed.
+  - **Results:** 0 `warning CS` or `error CS` lines. The 4 player build warnings are TMP package shader pragmas. Unit tests 27/27; Validate Project passed; autotest 279/279; exit code 0.

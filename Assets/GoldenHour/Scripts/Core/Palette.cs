@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 namespace GoldenHour
 {
@@ -34,27 +34,5 @@ namespace GoldenHour
         public static readonly Color Hazard = new Color32(255, 170, 40, 255);
         public static readonly Color LampGlow = new Color32(255, 214, 150, 255);
         public static readonly Color Beacon = new Color32(255, 236, 170, 255);
-
-        public static Color ForCategory(TriageCategory category)
-        {
-            switch (category)
-            {
-                case TriageCategory.Red: return TriageRed;
-                case TriageCategory.Yellow: return TriageYellow;
-                case TriageCategory.Green: return TriageGreen;
-                default: return Slate;
-            }
-        }
-
-        public static string Label(TriageCategory category)
-        {
-            switch (category)
-            {
-                case TriageCategory.Red: return "RED | IMMEDIATE";
-                case TriageCategory.Yellow: return "YELLOW | DELAYED";
-                case TriageCategory.Green: return "GREEN | MINOR";
-                default: return category.ToString().ToUpperInvariant();
-            }
-        }
     }
 }
