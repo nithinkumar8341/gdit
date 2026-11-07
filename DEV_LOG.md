@@ -16,3 +16,15 @@
 - **Phase 10 (test):** Added `AutomatedPlaytest` (`-goldenhour-autotest`). Screenshots exposed a kit lid that opened downward and then toward the player. The hinge axis is now derived from the lid geometry and the kit is rotated so it opens away from the player. Tightened panel sizes. Final run: 65/65 checks passed, 0 exceptions in the player log.
 - **Phase 11 (build and docs):** `GoldenHour/Build Windows Player` succeeded: `Builds/GoldenHour/GoldenHour.exe`, 111,357,687 bytes reported. The 3 warnings are TextMesh Pro shader pragma deprecations from the package. Wrote `README.md` and `TESTING_REPORT.md`, and copied the evidence to `Docs/TestEvidence/`.
 - **Phase 12 (polish):** HUD text now has opaque backings on the overlay canvas, and TMP overflow is Truncate (fixes the LiberationSans Ellipsis warning). The player starts at z = -13.5. Patients get pulsing beacons, and a compass arrow points to the nearest unexamined person, then to the kit. Late-afternoon sun, procedural sky, linear fog, and a post-processing profile (bloom, vignette, grading, white balance, neutral tonemapping); SSAO is now half resolution. A consistent palette; skid marks, glass, hubcap, fences, grass, lamp bulbs and signs; flashing hazard lights and engine smoke. Footsteps and hover sound; sensitivity in Settings and Pause; scene fades; button hover and press scaling; a 15-second tutorial tip. Easy/Normal difficulty, and patient positions shuffle on Restart. Autotest extended to 107 checks: all pass, 0 exceptions, rebuilt player.
+
+## v2 (V2_SPEC.md)
+
+- **M1 (simulation core):** New `GoldenHour.Core` assembly (pure C#, no scene dependencies). It contains:
+  - `StartTriage`: four START categories, the step that decided each, and explanations.
+  - `PhysiologyState`: breathing rate, airway, capillary refill, radial pulse, commands, bleeding.
+  - `CasualtyProfile` (ScriptableObject): deterioration (death/worsen minutes, refill drift) and stabilising treatments.
+  - `CasualtySim`: seeded and deterministic. It handles deterioration, death, treatment, transport and the measured breathing rate.
+  - `TriageRecord`: a tag requires an examination, a retriage requires re-examination, only the first tag is fully scored, and a justified retriage earns +40.
+  - `ScoreRules`/`ScoreLedger`, `HandoverRules`, `DispatchReport`, `AdaptiveDifficulty`, and telemetry/profile data.
+  - 26 edit-mode NUnit tests (Test Framework 1.8): 26/26 pass in batch mode. The first run failed 1 test because the test drew the random stream twice; the test was fixed.
+  - The v1 game is unchanged and still builds; v2 gameplay integration follows in M2.
