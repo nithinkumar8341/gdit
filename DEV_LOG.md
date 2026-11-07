@@ -28,3 +28,19 @@
   - `ScoreRules`/`ScoreLedger`, `HandoverRules`, `DispatchReport`, `AdaptiveDifficulty`, and telemetry/profile data.
   - 26 edit-mode NUnit tests (Test Framework 1.8): 26/26 pass in batch mode. The first run failed 1 test because the test drew the random stream twice; the test was fixed.
   - The v1 game is unchanged and still builds; v2 gameplay integration follows in M2.
+- **M2 (scenarios and systems):** The v2 gameplay runs on `IncidentDirector`; the v1 `GameplayController` stack is removed.
+  - **Content:** `GoldenHourContent` builds the casualty profiles and four `ScenarioData` assets: Tutorial (3 casualties), Highway (6), Night/Rain Bus Rollover (10, fuel leak, fire), Collapsed Building (12, children, walking wounded).
+  - **Scene phase:** hazard marking, then a 112 dispatch minigame scored field by field. Supplies are limited.
+  - **Response:** ambulance waves timed from dispatch, with paramedics walking on a runtime-baked NavMesh and carrying casualties on a stretcher. Handover order is scored against START priority.
+  - **Crowd and command:** the walking-wounded shout sends people to the green zone; panicking bystanders can be calmed; incident-commander radio cues; tablet; pause menu.
+  - **Removed (v1):** GameplayController, ObjectiveTracker, PatientActor, PatientBeacon, PatientData/SupplyData (scripts and assets), TriageEvaluator, GameplayHud. The builder now strips missing scripts and validates the IncidentDirector.
+  - **Fixes found by the autotest:**
+    - `Ambulance.CompleteLoadingNow` lost the casualty mid-fetch; the queue is now dequeued only on load.
+    - Actions after the scene was cleared closed the debrief and scored after the end; they are now guarded.
+    - Green-zone casualties were offered for handover; they are now excluded.
+    - Correctly tagged BLACK (expectant) casualties now count as resolved.
+- **M3 (interactive first aid):** `FirstAidMinigame` runs on the overlay canvas while the clock keeps running.
+  - **Recovery position:** roll the casualty with A/D into the on-side band; rolling too far is caught and eased back; then press Space to tilt the head and open the airway.
+  - **CPR:** press Space in rhythm with a 110 bpm metronome; the rate is measured against 100-120 per minute over 30 compressions. The panel shows the simplification note and states that CPR is deprioritised in mass-casualty triage. CPR is never scored.
+  - **Already in place from M2:** hold-to-apply pressure dressing, blanket, airway, the gloves-first penalty, breathing motion, restless/limp states, barks. No gore.
+  - **Verification:** player autotest 226/226 checks pass (all four scenarios end to end: exact score tally, deterioration/death, retriage, handover, minigames with simulated input), 0 errors or exceptions. Edit-mode tests 26/26.

@@ -65,6 +65,12 @@ namespace GoldenHour
             return -Size.y * 0.5f + 48f + rowFromBottom * 66f;
         }
 
+        /// <summary>Temporarily hides the modal (it stays open) so the scene behind is visible.</summary>
+        public void SetHidden(bool hidden)
+        {
+            if (backdrop != null) backdrop.SetActive(!hidden);
+        }
+
         public void Close()
         {
             if (backdrop != null)

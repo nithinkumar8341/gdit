@@ -22,6 +22,7 @@ namespace GoldenHour
         public const int DispatchFields = 4;
         public const int WalkingCommand = 30;
         public const int BystanderCalmed = 10;
+        public const int DangerZone = -10;
         public const int MaxTimeBonus = 100;
         public const int TimeBonusPerMinute = 2;
 

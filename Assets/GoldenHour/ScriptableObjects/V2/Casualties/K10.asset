@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d3bd43d53b3c3b245b9ddca6b446f3f6, type: 3}
+  m_Name: K10
+  m_EditorClassIdentifier: GoldenHour.Core::GoldenHour.CasualtyProfile
+  casualtyId: K10
+  displayName: Ben Fraser
+  age: 40
+  variant: 0
+  pose: 2
+  clothingColor: {r: 0.47058824, g: 0.3529412, b: 0.23529412, a: 1}
+  appearance: lying quietly, sweaty and grey.
+  injurySummary: Pinned by the legs for a while; now free. Belly pain.
+  initial:
+    canWalk: 0
+    airwayObstructed: 0
+    airwayOpened: 0
+    respiratoryRate: 24
+    capillaryRefill: 3.2
+    radialPulse: 0
+    followsCommands: 1
+    bleeding: 0
+    bleedingControlled: 0
+    deceased: 0
+  condition: 4
+  deathMinute: 30
+  worsenMinute: 0
+  worsenedRespiratoryRate: 0
+  worsenedCapillaryRefill: 0
+  worsenedLosesCommands: 0
+  capillaryRefillRisePerMinute: 0
+  stabilisedBy: 0
+  airwayOpeningDelayMinutes: 8
+  indicatedTreatments: 8
+  aidNote: Blanket; urgent transport.
+  barks:
+  - Feel faint...

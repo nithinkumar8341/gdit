@@ -15,6 +15,10 @@ namespace GoldenHour
 
         private static SceneFader instance;
         private CanvasGroup group;
+        private TMPro.TMP_Text loadingLabel;
+
+        /// <summary>Title and tip shown on the loading screen during the next scene change.</summary>
+        public static string LoadingText { get; set; } = string.Empty;
         private bool loading;
 
         public static bool IsLoading => instance != null && instance.loading;
@@ -51,8 +55,13 @@ namespace GoldenHour
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
             image.GetComponent<Image>().color = new Color32(6, 8, 11, 255);
+            TMPro.TMP_Text label = UiFactory.Text(root.transform, string.Empty, 24, new Vector2(1100f, 240f), new Vector2(0f, -60f),
+                TMPro.TextAlignmentOptions.Center);
+            root.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            root.GetComponent<CanvasScaler>().referenceResolution = new Vector2(1600f, 900f);
             instance = root.AddComponent<SceneFader>();
             instance.group = root.GetComponent<CanvasGroup>();
+            instance.loadingLabel = label;
             instance.group.alpha = 0f;
             instance.group.blocksRaycasts = false;
             instance.group.interactable = false;
@@ -70,13 +79,18 @@ namespace GoldenHour
         {
             loading = true;
             group.blocksRaycasts = true;
+            loadingLabel.text = LoadingText;
             yield return Fade(group.alpha, 1f);
             Time.timeScale = 1f;
+            float shownUntil = Time.realtimeSinceStartup + (string.IsNullOrEmpty(LoadingText) ? 0f : 1.2f);
             AsyncOperation operation = SceneManager.LoadSceneAsync(sceneName);
             while (operation != null && !operation.isDone) yield return null;
+            while (Time.realtimeSinceStartup < shownUntil) yield return null;
             yield return null;
+            LoadingText = string.Empty;
             loading = false;
             yield return Fade(1f, 0f);
+            loadingLabel.text = string.Empty;
         }
 
         private IEnumerator Fade(float from, float to)

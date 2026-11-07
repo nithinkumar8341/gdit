@@ -1,0 +1,123 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dcb1b260c9510d24f8f2bae071d6dbe1, type: 3}
+  m_Name: building
+  m_EditorClassIdentifier: Assembly-CSharp::GoldenHour.ScenarioData
+  scenarioId: building
+  title: Collapsed Community Hall
+  description: The roof of a community hall has collapsed during a children's event. Twelve casualties and a crowd of walking wounded.
+  order: 3
+  nextScenarioId: 
+  tutorial: 0
+  environment: 3
+  night: 0
+  rain: 0
+  goldenHourMinutes: 60
+  simMinutesPerSecond: 0.08
+  seed: 404
+  playerStart: {x: 0, y: 0.1, z: -12}
+  playerYaw: 0
+  kitPosition: {x: -2, y: 0.02, z: -9}
+  greenZone: {x: -15, y: 0, z: -6}
+  ambulanceBay: {x: -6, y: 0, z: -20}
+  ambulanceSpawn: {x: -48, y: 0, z: -20}
+  flythrough:
+  - {x: 16, y: 14, z: 28}
+  - {x: 10, y: 8, z: 14}
+  - {x: -6, y: 4, z: 0}
+  - {x: 0, y: 2.2, z: -12.5}
+  casualties:
+  - profile: {fileID: 11400000, guid: 295082a98d47c06428ab8d9d943ec02b, type: 2}
+    position: {x: -6, y: 0, z: -2}
+    yaw: 150
+  - profile: {fileID: 11400000, guid: 2bd8dff36072faf48ada0c77cc2955c9, type: 2}
+    position: {x: -4.5, y: 0, z: -1}
+    yaw: 200
+  - profile: {fileID: 11400000, guid: f4206dc72cc41994d8b3583920daf89b, type: 2}
+    position: {x: 5, y: 0, z: -1}
+    yaw: 210
+  - profile: {fileID: 11400000, guid: fc2808cf286a14042873f12d8a9b8956, type: 2}
+    position: {x: 7, y: 0, z: 0}
+    yaw: 190
+  - profile: {fileID: 11400000, guid: 0e774fe0ec1740943be9068f41347850, type: 2}
+    position: {x: -3, y: 0, z: 4}
+    yaw: 90
+  - profile: {fileID: 11400000, guid: 453835965cf10f94b809c919716c45c6, type: 2}
+    position: {x: 3, y: 0, z: 5}
+    yaw: -90
+  - profile: {fileID: 11400000, guid: 10050d4a7662b2246bb5e36c9a65705f, type: 2}
+    position: {x: -6, y: 0, z: 8}
+    yaw: 0
+  - profile: {fileID: 11400000, guid: 79771a4b7a6ac8b4487685f3fb603ee5, type: 2}
+    position: {x: 6, y: 0, z: 9}
+    yaw: 180
+  - profile: {fileID: 11400000, guid: a830255fc7332104a864bf5563f2cfc8, type: 2}
+    position: {x: 0, y: 0, z: 6.5}
+    yaw: 90
+  - profile: {fileID: 11400000, guid: 71716b6efe138354fac8eddf4451a9d1, type: 2}
+    position: {x: -1, y: 0, z: 10.5}
+    yaw: 45
+  - profile: {fileID: 11400000, guid: 4fe381f4c72cf5d45a853334d54147f1, type: 2}
+    position: {x: 3.5, y: 0, z: 12.5}
+    yaw: 200
+  - profile: {fileID: 11400000, guid: c3a0637538237524a84e014346a490dd, type: 2}
+    position: {x: -8, y: 0, z: 2}
+    yaw: 120
+  hazards:
+  - type: 4
+    position: {x: 9, y: 0, z: 15}
+    yaw: 0
+    radius: 3
+  - type: 5
+    position: {x: -12, y: 0, z: 10}
+    yaw: 0
+    radius: 2
+  - type: 3
+    position: {x: 12, y: 0, z: -3}
+    yaw: 0
+    radius: 2.5
+  waves:
+  - minute: 8
+    capacity: 2
+  - minute: 14
+    capacity: 3
+  - minute: 21
+    capacity: 3
+  - minute: 28
+    capacity: 3
+  radio:
+  - minute: 0
+    text: 'Incident command: you are the first trained responder at the hall. Safety, then a report.'
+  - minute: 10
+    text: 'Incident command: the electricity company is isolating the power line. Keep everyone clear.'
+  - minute: 24
+    text: 'Incident command: urban search and rescue is ten minutes out for anyone trapped.'
+  bystanders: 3
+  locationOptions:
+  - Riverside Community Hall, Mill Lane
+  - Mill Lane Primary School
+  - Riverside retail park
+  correctLocation: 0
+  gloves: 3
+  dressings: 1
+  blankets: 2
+  briefing: Saturday afternoon. Part of the roof of Riverside Community Hall on Mill Lane has collapsed during a children's party next to a building site. Parents, children and workers are everywhere. A power line is down, a gas cylinder is hissing, and a wall is leaning. Use the walking-wounded command early - there are many people who can walk.
+  loadingTips:
+  - 'START takes about 30-60 seconds per person: walking, breathing, circulation, commands.'
+  - Shout "if you can walk, go to the green zone" first - it sorts the walking wounded in seconds.
+  - 'Capillary refill: press a fingernail and count how long the colour takes to return. Over 2 seconds is poor circulation.'
+  - Open the airway of anyone not breathing. If they start breathing, they are RED. If not, BLACK.
+  - Gloves first. Every hands-on check without gloves costs points.
+  - Conditions change. Re-check people - a justified re-tag earns credit.
+  - Hand over RED before YELLOW, YELLOW before GREEN. Never send someone tagged BLACK.
+  - This is an educational model, not medical training. Check real procedures with a qualified first-aid trainer.
+  tutorialSteps: []

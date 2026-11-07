@@ -1,0 +1,607 @@
+using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Text.RegularExpressions;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+namespace GoldenHour
+{
+    /// <summary>Plays one v2 scenario to the debrief while keeping an independent score tally.</summary>
+    public sealed partial class AutomatedPlaytest
+    {
+        private int expected;
+        private readonly List<string> tally = new List<string>();
+
+        private void Expect(int points, string reason)
+        {
+            expected += points;
+            tally.Add((points >= 0 ? "+" : "") + points + " " + reason);
+        }
+
+        private IEnumerator PlayScenario(string id)
+        {
+            IncidentDirector d = IncidentDirector.Instance;
+            Check(id + ": scenario loads", d != null && d.Scenario.scenarioId == id);
+            if (d == null) yield break;
+            expected = 0;
+            tally.Clear();
+            Time.timeScale = 1f;
+
+            yield return WaitFor(() => d.Phase == IncidentPhase.Intro || d.Phase == IncidentPhase.Briefing, 8f);
+            if (d.Phase == IncidentPhase.Intro)
+            {
+                yield return new WaitForSeconds(1.5f);
+                if (id == "tutorial" || id == "bus") yield return Screenshot(id + "_00_intro_cutscene");
+                Check(id + ": opening fly-through cutscene plays", d.Phase == IncidentPhase.Intro);
+                Cutscene.Skip();
+            }
+
+            yield return WaitFor(() => d.Phase == IncidentPhase.Briefing, 10f);
+            Check(id + ": briefing with the not-medically-reviewed disclaimer", d.Phase == IncidentPhase.Briefing &&
+                                                                               ScreenTextContains("NOT been medically reviewed"));
+            yield return Screenshot(id + "_01_briefing");
+            d.BeginScenario();
+            yield return null;
+            ScenarioData scenario = d.Scenario;
+            Check(id + ": casualties and hazards spawned", d.Casualties.Count == scenario.casualties.Count && d.Hazards.Count == scenario.hazards.Count,
+                d.Casualties.Count + " casualties, " + d.Hazards.Count + " hazards");
+            Check(id + ": NavMesh baked at runtime", ScenarioEnvironment.NavMeshReady);
+            float startMinute = d.Minute;
+            yield return new WaitForSeconds(0.6f);
+            Check(id + ": golden-hour clock runs in real time", d.Minute > startMinute, d.Minute.ToString("0.000"));
+            yield return Screenshot(id + "_02_scene");
+
+            if (id == "tutorial") yield return TutorialRealInput(d);
+            else d.CollectKit();
+            Check(id + ": first-aid bag collected with limited supplies", d.KitCollected && d.Dressings == scenario.dressings && d.Blankets == scenario.blankets);
+
+            Casualty probe = d.Casualties[d.Casualties.Count - 1];
+            d.OpenExamination(probe);
+            Check(id + ": examination is blocked before the dispatch report", !(d.Modal.IsOpen && d.Modal.Title.StartsWith(IncidentDirector.ExamTitlePrefix)));
+
+            d.InstantActions = true;
+            bool skipGloves = id == "highway";
+            if (!skipGloves)
+            {
+                d.PutOnGloves();
+                Check(id + ": gloves on (one pair used)", d.GlovesOn && d.Gloves == scenario.gloves - 1);
+            }
+
+            foreach (Hazard hazard in d.Hazards)
+            {
+                d.MarkHazard(hazard);
+                Expect(ScoreRules.HazardMarked, "hazard " + hazard.Type);
+            }
+
+            Check(id + ": every hazard marked", d.Hazards.TrueForAll(h => h.Marked));
+            if (id == "bus" || id == "building") yield return Screenshot(id + "_03_hazards");
+
+            d.OpenDispatch();
+            yield return null;
+            Check(id + ": dispatch report minigame opens", d.Modal.Title == IncidentDirector.DispatchTitle);
+            DispatchReport draft = d.DispatchDraft;
+            draft.emergencyNumber = id == "bus" ? "911" : "112";
+            draft.locationIndex = scenario.correctLocation;
+            draft.casualtyCount = scenario.casualties.Count;
+            draft.hazardMask = scenario.HazardMask;
+            if (id == "tutorial") yield return Screenshot(id + "_04_dispatch");
+            d.SubmitDispatch();
+            int fields = id == "bus" ? 3 : 4;
+            Expect(fields * ScoreRules.DispatchField, "dispatch");
+            Check(id + ": dispatch scored field by field (wrong number in the bus scenario)", d.DispatchFieldsCorrect == fields && d.Phase == IncidentPhase.Response,
+                d.DispatchFieldsCorrect + "/4");
+            d.ClosePanel();
+
+            if (skipGloves)
+            {
+                Casualty touched = d.Casualties.Find(c => !c.Sim.State.canWalk && !c.Sim.InitiallyExpectant);
+                d.OpenExamination(touched);
+                d.PerformExam(touched, ExamAction.CheckBreathing);
+                Expect(ScoreRules.NoGloves, "no gloves " + touched.Id);
+                Check(id + ": touching a casualty without gloves is penalised", d.Ledger.Count("gloves", true) == 1);
+                d.ClosePanel();
+                d.PutOnGloves();
+            }
+
+            // Walking wounded.
+            List<Casualty> walkers = d.Casualties.FindAll(c => c.Sim.State.canWalk);
+            int moving = d.ShoutWalkingWounded();
+            if (walkers.Count > 0) Expect(ScoreRules.WalkingCommand, "walking command");
+            Check(id + ": shout sends every walking casualty to the green zone", moving == walkers.Count, moving + "/" + walkers.Count);
+            Time.timeScale = 4f;
+            yield return WaitFor(() => walkers.TrueForAll(c => c.InGreenZone), 30f);
+            Time.timeScale = 1f;
+            foreach (Casualty walker in walkers)
+            {
+                if (walker.AutoTaggedGreen) Expect(ScoreRules.FirstTag(TriageTag.Green, walker.Record.FirstTruth), "walker " + walker.Id);
+            }
+
+            Check(id + ": walking wounded reach the green zone on the NavMesh and are tagged GREEN",
+                walkers.TrueForAll(c => c.InGreenZone && c.Record.CurrentTag == TriageTag.Green));
+            if (id == "building") yield return Screenshot(id + "_05_green_zone");
+
+            // Plan: handle the most time-critical casualties first; some scenarios keep one for a rule test.
+            Casualty retriageCase = id == "highway" ? Find(d, "H05") : null;
+            Casualty deathCase = id == "bus" ? Find(d, "B07") : null;
+            Casualty wrongTagCase = id == "building" ? Find(d, "K12") : null;
+            Casualty bleeder = d.Casualties.Find(c => c.Profile.initial.bleeding == BleedingLevel.Severe);
+            if (id == "tutorial" && bleeder != null)
+            {
+                float before = bleeder.Sim.State.capillaryRefill;
+                d.AdvanceSimulation(1.5f);
+                Check(id + ": untreated heavy bleeding worsens circulation over time", bleeder.Sim.State.capillaryRefill > before,
+                    before.ToString("0.00") + " -> " + bleeder.Sim.State.capillaryRefill.ToString("0.00") + " s");
+            }
+
+            List<Casualty> queue = d.Casualties.FindAll(c => !c.InGreenZone && c != deathCase);
+            queue.Sort((a, b) => Urgency(a).CompareTo(Urgency(b)));
+            bool screenshotTaken = false;
+            foreach (Casualty casualty in queue)
+            {
+                yield return ExamineAndTag(d, casualty, casualty == wrongTagCase);
+                if (!screenshotTaken && !casualty.Sim.InitiallyExpectant)
+                {
+                    screenshotTaken = true;
+                    d.OpenExamination(casualty);
+                    yield return null;
+                    yield return Screenshot(id + "_06_examination");
+                }
+
+                yield return GiveAid(d, casualty, casualty == retriageCase);
+                d.ClosePanel();
+            }
+
+            if (id == "highway") yield return WrongTreatmentAndRetriage(d, retriageCase);
+            if (deathCase != null) yield return DeathTest(d, deathCase);
+            if (wrongTagCase != null) yield return UnjustifiedRetagTest(d, wrongTagCase);
+
+            Casualty expectant = d.Casualties.Find(c => c.Sim.InitiallyExpectant);
+            if (expectant != null)
+            {
+                if (id == "building") yield return CprMinigame(d, expectant);
+                else d.RequestTreatment(expectant, Treatment.Cpr);
+                yield return null;
+                Check(id + ": CPR in mass-casualty triage is deprioritised (educational note, no score)", d.Hud.StatusText.Contains("deprioritised"));
+            }
+
+            d.InstantActions = false;
+            yield return Screenshot(id + "_07_triaged");
+
+            // Ambulances in waves; hand over by priority.
+            yield return Handovers(d, id);
+
+            yield return WaitFor(() => d.Finished, 10f);
+            Check(id + ": scenario ends when every casualty is resolved", d.Finished, d.EndReason);
+            if (d.Run.ledger.Exists(e => e.category == "time"))
+            {
+                Expect(ScoreRules.TimeBonus(scenario.goldenHourMinutes - d.Run.durationMinutes), "time bonus");
+            }
+
+            foreach (Casualty casualty in d.Casualties)
+            {
+                if (casualty.Sim.PreventableDeath && casualty != deathCase) Expect(ScoreRules.PreventableDeath, "unplanned death " + casualty.Id);
+            }
+
+            yield return WaitFor(() => d.Phase == IncidentPhase.Debrief || d.Phase == IncidentPhase.Ending, 5f);
+            if (d.Phase == IncidentPhase.Ending)
+            {
+                yield return new WaitForSeconds(1f);
+                if (id == "highway") yield return Screenshot(id + "_08_end_cutscene");
+                Cutscene.Skip();
+                yield return WaitFor(() => d.Phase == IncidentPhase.Debrief, 8f);
+            }
+
+            Check(id + ": exact score - game ledger equals the independent tally", d.Ledger.Total == expected,
+                "ledger " + d.Ledger.Total + ", tally " + expected + (d.Ledger.Total != expected ? " | tally: " + string.Join("; ", tally) +
+                                                                     " | ledger: " + LedgerSummary(d) : string.Empty));
+            RunRecord run = d.Run;
+            Check(id + ": run telemetry saved as JSON (decisions, path, outcomes)", Session.LastRunPath != null && File.Exists(Session.LastRunPath) &&
+                                                                                  run.casualties.Count == d.Casualties.Count && run.path.Count > 0 &&
+                                                                                  run.events.Exists(e => e.type == "tag"));
+            Check(id + ": 1-3 stars awarded", run.stars >= 1 && run.stars <= 3, run.score + "/" + run.maximumScore + " = " + run.stars + " stars");
+            Check(id + ": debrief shown with feedback and disclaimer", d.Phase == IncidentPhase.Debrief && run.feedback.Count > 0 &&
+                                                                     ScreenTextContains("NOT been medically reviewed"));
+            yield return DebriefChecks(d, id);
+            ScenarioProgress progress = ProfileStore.Load().Get(id);
+            Check(id + ": profile records the run and unlocks the next scenario",
+                progress.plays >= 1 && progress.bestScore == Mathf.Max(progress.bestScore, run.score) &&
+                (string.IsNullOrEmpty(scenario.nextScenarioId) || ProfileStore.Load().Get(scenario.nextScenarioId).unlocked));
+        }
+
+        private static string LedgerSummary(IncidentDirector d)
+        {
+            List<string> items = new List<string>();
+            foreach (ScoreEntry entry in d.Ledger.Entries) items.Add(entry.points + " " + entry.category + ":" + entry.casualtyId);
+            return string.Join(", ", items);
+        }
+
+        private static Casualty Find(IncidentDirector d, string id) => d.Casualties.Find(c => c.Id == id);
+
+        private static float Urgency(Casualty casualty)
+        {
+            float death = casualty.Sim.EffectiveDeathMinute;
+            if (death > 0f) return death;
+            float worsen = casualty.Sim.EffectiveWorsenMinute;
+            return worsen > 0f ? worsen : 999f;
+        }
+
+        // --------------------------------------------------------- examination
+
+        private IEnumerator ExamineAndTag(IncidentDirector d, Casualty casualty, bool deliberateMistake)
+        {
+            d.OpenExamination(casualty);
+            yield return null;
+            string id = d.Scenario.scenarioId;
+            bool opened = d.Modal.IsOpen && d.Modal.Title == IncidentDirector.ExamTitlePrefix + casualty.Id;
+            if (!opened) Check(id + ": examination opens for " + casualty.Id, false, d.Modal.Title);
+            bool airwayWasNeeded = casualty.Sim.State.airwayObstructed && !casualty.Sim.State.airwayOpened;
+            d.PerformExam(casualty, ExamAction.AskToWalk);
+            d.PerformExam(casualty, ExamAction.CheckBreathing);
+            if (casualty.Findings[ExamAction.CheckBreathing].text.Contains("NOT breathing"))
+            {
+                d.PerformExam(casualty, ExamAction.OpenAirway);
+                if (airwayWasNeeded && casualty.Sim.State.airwayOpened && (casualty.Profile.indicatedTreatments & Treatment.AirwayOpening) != 0)
+                {
+                    Expect(ScoreRules.TreatmentEffective, "airway " + casualty.Id);
+                }
+            }
+
+            d.PerformExam(casualty, ExamAction.CheckCirculation);
+            d.PerformExam(casualty, ExamAction.GiveCommand);
+            d.PerformExam(casualty, ExamAction.LookForBleeding);
+            TriageTag fromFindings = StartFromFindings(casualty);
+            TriageTag truth = casualty.Sim.TrueTag;
+            Check(id + ": findings alone give the correct START category for " + casualty.Id, fromFindings == truth,
+                "findings -> " + fromFindings + ", START " + truth);
+            TriageTag chosen = deliberateMistake ? TriageTag.Green : fromFindings;
+            float before = d.Minute;
+            d.RequestTag(casualty, chosen);
+            Expect(ScoreRules.FirstTag(chosen, truth), "tag " + casualty.Id + " " + chosen + " vs " + truth);
+            Check(id + ": physical tag placed on " + casualty.Id + (deliberateMistake ? " (deliberately wrong)" : string.Empty),
+                casualty.Record.CurrentTag == chosen && casualty.GetComponentInChildren<Renderer>() != null &&
+                casualty.transform.Find("Triage Tag") != null);
+            Check(id + ": examination and tagging cost simulated time", d.Minute > before - 0.0001f && casualty.Record.FirstExamMinute >= 0f);
+        }
+
+        /// <summary>Rebuilds a physiology state purely from the on-screen findings and runs START on it.</summary>
+        private static TriageTag StartFromFindings(Casualty casualty)
+        {
+            PhysiologyState state = new PhysiologyState { capillaryRefill = 1f, radialPulse = true, followsCommands = true };
+            IReadOnlyDictionary<ExamAction, Finding> findings = casualty.Findings;
+            if (findings.TryGetValue(ExamAction.AskToWalk, out Finding walk)) state.canWalk = walk.text.Contains("walks a few steps");
+            if (findings.TryGetValue(ExamAction.CheckBreathing, out Finding breathing))
+            {
+                Match rate = Regex.Match(breathing.text, @"(\d+) breaths per minute");
+                state.respiratoryRate = rate.Success ? int.Parse(rate.Groups[1].Value, CultureInfo.InvariantCulture) : 0;
+            }
+
+            if (findings.TryGetValue(ExamAction.OpenAirway, out Finding airway))
+            {
+                Match started = Regex.Match(airway.text, @"STARTED, (\d+) per minute");
+                if (started.Success)
+                {
+                    state.airwayObstructed = true;
+                    state.respiratoryRate = int.Parse(started.Groups[1].Value, CultureInfo.InvariantCulture);
+                }
+                else if (airway.text.Contains("still NOT breathing"))
+                {
+                    state.respiratoryRate = 0;
+                }
+            }
+
+            if (findings.TryGetValue(ExamAction.CheckCirculation, out Finding circulation))
+            {
+                Match refill = Regex.Match(circulation.text, @"refill ([0-9.]+) s");
+                if (refill.Success) state.capillaryRefill = float.Parse(refill.Groups[1].Value, CultureInfo.InvariantCulture);
+                state.radialPulse = !circulation.text.Contains("ABSENT") && !circulation.text.Contains("no pulse");
+            }
+
+            if (findings.TryGetValue(ExamAction.GiveCommand, out Finding command)) state.followsCommands = command.text.Contains("squeezes");
+            return StartTriage.Evaluate(state);
+        }
+
+        // ----------------------------------------------------------------- aid
+
+        private IEnumerator GiveAid(IncidentDirector d, Casualty casualty, bool holdBackBlanket)
+        {
+            if (casualty.Sim.State.deceased) yield break;
+            Treatment indicated = casualty.Profile.indicatedTreatments;
+            Treatment[] order = { Treatment.PressureDressing, Treatment.RecoveryPosition, Treatment.Blanket, Treatment.Reassure };
+            foreach (Treatment treatment in order)
+            {
+                if ((indicated & treatment) == 0 || (casualty.Sim.Applied & treatment) != 0) continue;
+                if (treatment == Treatment.Blanket && (holdBackBlanket || d.Blankets <= 0)) continue;
+                if (treatment == Treatment.PressureDressing && d.Dressings <= 0) continue;
+                if (treatment == Treatment.RecoveryPosition && d.Scenario.scenarioId == "tutorial")
+                {
+                    yield return RecoveryMinigame(d, casualty);
+                }
+                else
+                {
+                    d.RequestTreatment(casualty, treatment);
+                }
+
+                yield return WaitFor(() => !d.ActionRunning && !FirstAidMinigame.Active, 5f);
+                bool applied = (casualty.Sim.Applied & treatment) != 0;
+                if (applied) Expect(ScoreRules.TreatmentEffective, treatment + " " + casualty.Id);
+                Check(d.Scenario.scenarioId + ": " + treatment + " applied to " + casualty.Id, applied);
+                if (treatment == Treatment.PressureDressing)
+                {
+                    Check(d.Scenario.scenarioId + ": pressure dressing stops the deterioration for " + casualty.Id, casualty.Sim.Stabilised);
+                }
+            }
+        }
+
+        private IEnumerator RecoveryMinigame(IncidentDirector d, Casualty casualty)
+        {
+            d.InstantActions = false;
+            float minuteBefore = d.Minute;
+            d.RequestTreatment(casualty, Treatment.RecoveryPosition);
+            yield return null;
+            Check("tutorial: recovery position opens the roll minigame", FirstAidMinigame.Kind == MinigameKind.RecoveryPosition && d.ActionRunning);
+            FirstAidMinigame.TestPress = true;
+            yield return null;
+            yield return null;
+            Check("tutorial: confirming before the casualty is on their side is refused", FirstAidMinigame.Active &&
+                                                                                          (casualty.Sim.Applied & Treatment.RecoveryPosition) == 0);
+            FirstAidMinigame.TestRotate = 1f;
+            yield return WaitFor(() => FirstAidMinigame.RolledTooFar > 0, 6f);
+            Check("tutorial: rolling too far (onto the front) is caught and eased back", FirstAidMinigame.RolledTooFar == 1 && casualty.RecoveryRoll < 0.8f);
+            FirstAidMinigame.TestRotate = 1f;
+            yield return WaitFor(() => casualty.RecoveryRoll >= 0.95f, 4f);
+            FirstAidMinigame.TestRotate = 0f;
+            yield return Screenshot("tutorial_07b_recovery_minigame");
+            FirstAidMinigame.TestPress = true;
+            yield return WaitFor(() => !FirstAidMinigame.Active, 2f);
+            Check("tutorial: stopping in the on-side band and tilting the head completes the recovery position",
+                (casualty.Sim.Applied & Treatment.RecoveryPosition) != 0 && casualty.Body.State == BodyState.Recovery);
+            Check("tutorial: the clock kept running during the minigame", d.Minute > minuteBefore);
+            d.InstantActions = true;
+        }
+
+        private IEnumerator CprMinigame(IncidentDirector d, Casualty casualty)
+        {
+            d.InstantActions = false;
+            Time.timeScale = 1f;
+            d.RequestTreatment(casualty, Treatment.Cpr);
+            yield return null;
+            Check("building: CPR opens the rhythm minigame with a metronome", FirstAidMinigame.Kind == MinigameKind.Cpr);
+            float interval = 60f / 110f;
+            for (int i = 0; i < FirstAidMinigame.CprCompressions && FirstAidMinigame.Active; i++)
+            {
+                FirstAidMinigame.TestPress = true;
+                if (i == 12) yield return Screenshot("building_06b_cpr_minigame");
+                yield return new WaitForSeconds(interval);
+            }
+
+            yield return WaitFor(() => !FirstAidMinigame.Active, 2f);
+            Check("building: 30 compressions in rhythm measure a rate of 100-120 per minute", FirstAidMinigame.LastAverageRate >= 100f &&
+                                                                                                FirstAidMinigame.LastAverageRate <= 120f,
+                FirstAidMinigame.LastAverageRate.ToString("0.0") + "/min, " + (FirstAidMinigame.LastInRangeFraction * 100f).ToString("0") + "% in range");
+            d.InstantActions = true;
+        }
+
+        private IEnumerator WrongTreatmentAndRetriage(IncidentDirector d, Casualty worsening)
+        {
+            Casualty chest = Find(d, "H04");
+            if (chest != null && d.Dressings > 0)
+            {
+                int dressings = d.Dressings;
+                d.RequestTreatment(chest, Treatment.PressureDressing);
+                yield return WaitFor(() => !d.ActionRunning, 5f);
+                Expect(ScoreRules.TreatmentNotIndicated, "wrong dressing H04");
+                Check("highway: a treatment that is not needed costs points and uses up the supply", d.Dressings == dressings - 1 &&
+                                                                                                    d.Ledger.Entries[d.Ledger.Entries.Count - 1].points == ScoreRules.TreatmentNotIndicated);
+            }
+
+            if (worsening == null) yield break;
+            Check("highway: H05 starts YELLOW and was tagged YELLOW", worsening.Record.FirstTag == TriageTag.Yellow);
+            float wait = worsening.Sim.EffectiveWorsenMinute - d.Minute + 0.3f;
+            if (wait > 0f) d.AdvanceSimulation(wait);
+            Check("highway: an untreated YELLOW casualty worsens to RED over time", worsening.Sim.Worsened && worsening.Sim.TrueTag == TriageTag.Red,
+                "minute " + d.Minute.ToString("0.0"));
+            int before = d.Ledger.Total;
+            d.RequestTag(worsening, TriageTag.Red);
+            Check("highway: retriage without re-examining is refused", worsening.Record.CurrentTag == TriageTag.Yellow && d.Ledger.Total == before &&
+                                                                       d.Run.events.Exists(e => e.type == "retag-blocked"));
+            float minute = d.Minute;
+            d.PerformExam(worsening, ExamAction.CheckCirculation);
+            d.RequestTag(worsening, TriageTag.Red);
+            Expect(ScoreRules.JustifiedRetriage, "justified retriage H05");
+            Check("highway: re-examining then re-tagging after a real change earns the smaller retriage credit, costs time and is logged",
+                worsening.Record.CurrentTag == TriageTag.Red && worsening.Record.Retags == 1 && worsening.Record.FirstTag == TriageTag.Yellow &&
+                d.Minute > minute && d.Ledger.Entries[d.Ledger.Entries.Count - 1].points == ScoreRules.JustifiedRetriage);
+            if (d.Blankets > 0)
+            {
+                d.RequestTreatment(worsening, Treatment.Blanket);
+                if ((worsening.Sim.Applied & Treatment.Blanket) != 0) Expect(ScoreRules.TreatmentEffective, "blanket H05 late");
+            }
+        }
+
+        private IEnumerator DeathTest(IncidentDirector d, Casualty casualty)
+        {
+            float death = casualty.Sim.EffectiveDeathMinute;
+            Check("bus: B07 has a defined time of death if the airway is not managed", death > 0f, death.ToString("0.0") + " min");
+            if (d.Minute < death) d.AdvanceSimulation(death - d.Minute + 0.1f);
+            Check("bus: untreated critical casualty dies at the defined time", casualty.Sim.State.deceased && casualty.Sim.PreventableDeath,
+                "minute " + d.Minute.ToString("0.0"));
+            Expect(ScoreRules.PreventableDeath, "death B07");
+            Check("bus: preventable death is penalised", d.Ledger.Count("death", true) == 1);
+            yield return ExamineAndTag(d, casualty, false);
+            d.ClosePanel();
+            Check("bus: a dead casualty's START category is BLACK", casualty.Record.CurrentTag == TriageTag.Black);
+        }
+
+        private IEnumerator UnjustifiedRetagTest(IncidentDirector d, Casualty casualty)
+        {
+            int before = d.Ledger.Total;
+            d.RequestTag(casualty, TriageTag.Yellow);
+            Check("building: retriage without re-examining is refused", casualty.Record.CurrentTag == TriageTag.Green && d.Ledger.Total == before);
+            d.PerformExam(casualty, ExamAction.AskToWalk);
+            d.RequestTag(casualty, TriageTag.Yellow);
+            Expect(0, "unjustified retag K12");
+            Check("building: correcting your own mistake without a change in condition earns no credit (first tag stays scored)",
+                casualty.Record.CurrentTag == TriageTag.Yellow && casualty.Record.Retags == 1 && d.Ledger.Total == before &&
+                casualty.Record.FirstTag == TriageTag.Green);
+            yield break;
+        }
+
+        // ------------------------------------------------------------ handover
+
+        private IEnumerator Handovers(IncidentDirector d, string id)
+        {
+            ScenarioData scenario = d.Scenario;
+            bool carriedReal = false;
+            bool wrongDone = false;
+            for (int wave = 0; wave < scenario.waves.Count; wave++)
+            {
+                if (d.Finished) break;
+                List<Casualty> waiting = d.HandoverCandidates();
+                if (waiting.Count == 0) break;
+                Ambulance ambulance = d.SpawnAmbulance(wave);
+                Time.timeScale = 4f;
+                yield return WaitFor(() => ambulance.State == AmbulanceState.Waiting, 20f);
+                Time.timeScale = 1f;
+                if (wave == 0)
+                {
+                    Check(id + ": ambulance drives in with sirens and paramedics", ambulance.State == AmbulanceState.Waiting &&
+                                                                                    ambulance.Lead != null && ambulance.Lead.gameObject.activeSelf &&
+                                                                                    ambulance.Sirens.Length > 0);
+                    yield return new WaitForSeconds(0.6f);
+                    d.OpenHandover(ambulance);
+                    yield return null;
+                    Check(id + ": handover panel lists tagged casualties", d.Modal.Title.StartsWith(IncidentDirector.HandoverTitlePrefix));
+                    if (id == "tutorial" || id == "highway") yield return Screenshot(id + "_09_handover");
+                }
+
+                while (ambulance.FreeSpaces > 0)
+                {
+                    waiting = d.HandoverCandidates();
+                    if (waiting.Count == 0) break;
+                    waiting.Sort((a, b) => StartTriage.Priority(a.Sim.TrueTag).CompareTo(StartTriage.Priority(b.Sim.TrueTag)));
+                    Casualty choice = waiting[0];
+                    bool expectCorrect = true;
+                    if (id == "building" && !wrongDone)
+                    {
+                        Casualty lower = waiting.Find(c => StartTriage.Priority(c.Sim.TrueTag) > StartTriage.Priority(waiting[0].Sim.TrueTag));
+                        if (lower != null)
+                        {
+                            choice = lower;
+                            expectCorrect = false;
+                            wrongDone = true;
+                        }
+                    }
+
+                    bool correct = d.HandOver(ambulance, choice);
+                    Expect(correct ? ScoreRules.HandoverCorrect : ScoreRules.HandoverWrong, "handover " + choice.Id);
+                    if (!expectCorrect) Check("building: handing over a lower priority while someone more urgent waits is penalised", !correct);
+                }
+
+                d.ClosePanel();
+                if (!carriedReal && id == "tutorial")
+                {
+                    carriedReal = true;
+                    Casualty first = null;
+                    foreach (Casualty casualty in d.Casualties)
+                    {
+                        if (casualty.AssignedToAmbulance && !casualty.Sim.Transported) first = casualty;
+                    }
+
+                    bool usedNavMesh = false;
+                    Time.timeScale = 4f;
+                    float end = Time.realtimeSinceStartup + 45f;
+                    while (first != null && !first.Sim.Transported && Time.realtimeSinceStartup < end)
+                    {
+                        usedNavMesh |= ambulance.Lead.Walker.UsingNavMesh;
+                        if (first.OnStretcher && !usedNavMesh) usedNavMesh = ambulance.Lead.Walker.UsingNavMesh;
+                        yield return null;
+                    }
+
+                    Time.timeScale = 1f;
+                    Check("tutorial: paramedics walk on the NavMesh and carry the casualty on a stretcher to the ambulance",
+                        first != null && first.Sim.Transported && usedNavMesh);
+                }
+
+                ambulance.CompleteLoadingNow();
+                if (ambulance.FreeSpaces > 0) d.ReleaseAmbulance(ambulance);
+                yield return null;
+            }
+
+            string unresolved = string.Empty;
+            foreach (Casualty c in d.Casualties)
+            {
+                if (c.Sim.State.deceased || c.Sim.Transported || c.InGreenZone || c.Record.CurrentTag == TriageTag.Black) continue;
+                unresolved += c.Id + "(tag " + c.Record.CurrentTag + ", true " + c.Sim.TrueTag + ", assigned " + c.AssignedToAmbulance + ", heading " +
+                              c.HeadingToGreenZone + ", walk " + c.Sim.State.canWalk + ") ";
+            }
+
+            Check(id + ": every surviving stretcher case was handed over", unresolved.Length == 0, unresolved + " waves " + scenario.waves.Count);
+        }
+
+        // ------------------------------------------------------------- debrief
+
+        private IEnumerator DebriefChecks(IncidentDirector d, string id)
+        {
+            yield return Screenshot(id + "_10_debrief");
+            if (!DebriefScreen.HasTabs) yield break;
+            foreach (string tab in DebriefScreen.Tabs)
+            {
+                DebriefScreen.ShowTab(d, tab);
+                yield return null;
+                if (id == "highway") yield return Screenshot(id + "_11_debrief_" + tab.ToLowerInvariant());
+            }
+
+            DebriefScreen.ShowTab(d, "Casualties");
+            yield return null;
+            Check(id + ": debrief explains each casualty with the START step that applied", ScreenTextContains("START step"));
+            DebriefScreen.ShowTab(d, "Map");
+            yield return null;
+            Check(id + ": debrief shows a top-down movement heatmap", DebriefScreen.HeatmapTexture != null && DebriefScreen.HeatmapCells > 0);
+            DebriefScreen.ShowTab(d, "Timeline");
+            yield return null;
+            Check(id + ": debrief shows the event timeline and decision times", ScreenTextContains("min") && ScreenTextContains("Decision time"));
+        }
+
+        // ------------------------------------------------------- tutorial input
+
+        private IEnumerator TutorialRealInput(IncidentDirector d)
+        {
+            FirstPersonPlayer player = FindAnyObjectByType<FirstPersonPlayer>();
+            GoldenHourAudio audio = FindAnyObjectByType<GoldenHourAudio>();
+            int steps = audio != null ? audio.FootstepsPlayed : 0;
+            Vector3 before = player.transform.position;
+            yield return HoldKey(Key.W, 1f);
+            Check("tutorial: real W key moves the player with footsteps", Vector3.Distance(Flat(before), Flat(player.transform.position)) > 2f &&
+                                                                          audio != null && audio.FootstepsPlayed > steps);
+            Check("tutorial: guided tutorial tip is shown", d.Hud.TipVisible && d.Hud.TipText.Contains("TUTORIAL 1/"));
+            yield return TapKey(Key.C);
+            yield return new WaitForSeconds(0.5f);
+            Check("tutorial: kneel key lowers the camera", player.IsKneeling && player.EyeHeight < FirstPersonPlayer.StandingEyeHeight - 0.2f,
+                player.EyeHeight.ToString("0.00"));
+            yield return TapKey(Key.C);
+
+            d.PauseForTest(true);
+            float paused = d.Minute;
+            yield return new WaitForSecondsRealtime(0.5f);
+            Check("tutorial: Esc pause stops the golden-hour clock", Mathf.Approximately(d.Minute, paused) && Time.timeScale == 0f);
+            yield return Screenshot("tutorial_02b_pause");
+            d.PauseForTest(false);
+
+            Vector3 focus = d.Kit.transform.position + Vector3.up * 0.35f;
+            player.Teleport(Flat(focus) + new Vector3(0f, 0.1f, -1.6f), 0f, 0f);
+            player.LookAt(focus);
+            yield return null;
+            yield return null;
+            Check("tutorial: interaction prompt and outline on the bag", d.Hud.Root.activeSelf && InteractionOutline.Current != null);
+            yield return Screenshot("tutorial_03_outline");
+            yield return TapKey(Key.E);
+            Check("tutorial: real E key collects the first-aid bag", d.KitCollected);
+            yield return TapKey(Key.G);
+            yield return WaitFor(() => d.GlovesOn, 4f);
+            Check("tutorial: real G key puts gloves on (viewmodel hands gloved)", d.GlovesOn && Viewmodel.Instance != null && Viewmodel.Instance.GlovesVisible);
+            yield return Screenshot("tutorial_03b_gloves");
+        }
+    }
+}

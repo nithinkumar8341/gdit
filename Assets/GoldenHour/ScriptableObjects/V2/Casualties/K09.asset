@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d3bd43d53b3c3b245b9ddca6b446f3f6, type: 3}
+  m_Name: K09
+  m_EditorClassIdentifier: GoldenHour.Core::GoldenHour.CasualtyProfile
+  casualtyId: K09
+  displayName: Edna Moss
+  age: 81
+  variant: 3
+  pose: 2
+  clothingColor: {r: 0.19607843, g: 0.50980395, b: 0.50980395, a: 1}
+  appearance: an elderly woman lying near the doorway.
+  injurySummary: Cannot get up; hip pain; talking.
+  initial:
+    canWalk: 0
+    airwayObstructed: 0
+    airwayOpened: 0
+    respiratoryRate: 20
+    capillaryRefill: 1.8
+    radialPulse: 1
+    followsCommands: 1
+    bleeding: 0
+    bleedingControlled: 0
+    deceased: 0
+  condition: 4
+  deathMinute: 0
+  worsenMinute: 17
+  worsenedRespiratoryRate: 24
+  worsenedCapillaryRefill: 3.1
+  worsenedLosesCommands: 0
+  capillaryRefillRisePerMinute: 0
+  stabilisedBy: 8
+  airwayOpeningDelayMinutes: 8
+  indicatedTreatments: 8
+  aidNote: Blanket and reassurance.
+  barks:
+  - Is everyone out?

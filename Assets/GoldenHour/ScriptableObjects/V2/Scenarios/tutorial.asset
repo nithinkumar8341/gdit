@@ -1,0 +1,93 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dcb1b260c9510d24f8f2bae071d6dbe1, type: 3}
+  m_Name: tutorial
+  m_EditorClassIdentifier: Assembly-CSharp::GoldenHour.ScenarioData
+  scenarioId: tutorial
+  title: Training Yard
+  description: 'Guided introduction: a low-speed collision in the training centre yard with three casualties.'
+  order: 0
+  nextScenarioId: highway
+  tutorial: 1
+  environment: 0
+  night: 0
+  rain: 0
+  goldenHourMinutes: 60
+  simMinutesPerSecond: 0.05
+  seed: 101
+  playerStart: {x: 0, y: 0.1, z: -9}
+  playerYaw: 0
+  kitPosition: {x: -2, y: 0.02, z: -6}
+  greenZone: {x: -8, y: 0, z: -3}
+  ambulanceBay: {x: 6, y: 0, z: -10}
+  ambulanceSpawn: {x: 6, y: 0, z: -36}
+  flythrough:
+  - {x: -12, y: 9, z: -14}
+  - {x: -4, y: 6, z: -4}
+  - {x: 6, y: 4, z: 2}
+  - {x: 0, y: 2.2, z: -9.5}
+  casualties:
+  - profile: {fileID: 11400000, guid: 6f5155b97a37e454992cbb89012a363a, type: 2}
+    position: {x: 5.5, y: 0, z: 1.5}
+    yaw: 200
+  - profile: {fileID: 11400000, guid: f1f6f78d6995ea44d978227e225db26b, type: 2}
+    position: {x: -1.8, y: 0, z: 3.5}
+    yaw: 100
+  - profile: {fileID: 11400000, guid: 0fbe7c557f26c6640a5d2b1e2b4ce28d, type: 2}
+    position: {x: 0.5, y: 0, z: 9}
+    yaw: -70
+  hazards:
+  - type: 1
+    position: {x: 2.6, y: 0, z: 2.6}
+    yaw: 0
+    radius: 1.5
+  waves:
+  - minute: 6
+    capacity: 2
+  - minute: 12
+    capacity: 1
+  radio:
+  - minute: 0
+    text: 'Training control: this is an exercise. Treat it like the real thing. Scene safety first.'
+  - minute: 9
+    text: 'Training control: remember to re-check anyone you have not looked at for a while.'
+  bystanders: 0
+  locationOptions:
+  - Training yard, First Responder Centre
+  - Car park, City Hospital
+  - Ring road, Junction 4
+  correctLocation: 0
+  gloves: 2
+  dressings: 2
+  blankets: 2
+  briefing: 'Welcome to the Training Yard. A car has hit a bollard at low speed. There are three people involved.
+
+
+    This guided scenario teaches the full loop: scene safety, the 112 dispatch report, START triage by examining, first aid, and handing over to the ambulance crew. Hints are always on here.'
+  loadingTips:
+  - 'START takes about 30-60 seconds per person: walking, breathing, circulation, commands.'
+  - Shout "if you can walk, go to the green zone" first - it sorts the walking wounded in seconds.
+  - 'Capillary refill: press a fingernail and count how long the colour takes to return. Over 2 seconds is poor circulation.'
+  - Open the airway of anyone not breathing. If they start breathing, they are RED. If not, BLACK.
+  - Gloves first. Every hands-on check without gloves costs points.
+  - Conditions change. Re-check people - a justified re-tag earns credit.
+  - Hand over RED before YELLOW, YELLOW before GREEN. Never send someone tagged BLACK.
+  - This is an educational model, not medical training. Check real procedures with a qualified first-aid trainer.
+  tutorialSteps:
+  - Walk to the red first-aid bag and collect it ({Interact}).
+  - Put on gloves ({Gloves}) before you touch anyone.
+  - 'Fuel is leaking by the car: look at it and mark the hazard ({Interact}).'
+  - 'Press {Radio} and send the dispatch report to 112: number, location, casualties, hazards.'
+  - 'Shout for the walking wounded ({Shout}): anyone who can walk goes to the green zone.'
+  - 'Examine and tag the others ({Interact}): check breathing, circulation and commands, then choose a tag.'
+  - 'Give the aid each person needs: hold {Primary} on a pressure dressing for heavy bleeding; recovery position for an unresponsive person who is breathing.'
+  - When the ambulance arrives, talk to the paramedic ({Interact}) and hand over the most urgent casualty first.

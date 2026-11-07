@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d3bd43d53b3c3b245b9ddca6b446f3f6, type: 3}
+  m_Name: B05
+  m_EditorClassIdentifier: GoldenHour.Core::GoldenHour.CasualtyProfile
+  casualtyId: B05
+  displayName: Hassan Ali
+  age: 48
+  variant: 0
+  pose: 2
+  clothingColor: {r: 0.47058824, g: 0.3529412, b: 0.23529412, a: 1}
+  appearance: lying by the bus, shivering, talking clearly.
+  injurySummary: Cannot stand; back pain. Cold and wet.
+  initial:
+    canWalk: 0
+    airwayObstructed: 0
+    airwayOpened: 0
+    respiratoryRate: 22
+    capillaryRefill: 1.9
+    radialPulse: 1
+    followsCommands: 1
+    bleeding: 0
+    bleedingControlled: 0
+    deceased: 0
+  condition: 4
+  deathMinute: 0
+  worsenMinute: 16
+  worsenedRespiratoryRate: 28
+  worsenedCapillaryRefill: 3
+  worsenedLosesCommands: 0
+  capillaryRefillRisePerMinute: 0
+  stabilisedBy: 8
+  airwayOpeningDelayMinutes: 8
+  indicatedTreatments: 8
+  aidNote: Keep warm with a blanket.
+  barks:
+  - I can't feel warm.
+  - Is the driver okay?

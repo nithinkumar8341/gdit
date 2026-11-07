@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -17,7 +17,7 @@ using UnityEngine.SceneManagement;
 namespace GoldenHour.EditorTools
 {
     /// <summary>
-    /// Editor automation for Golden Hour: creates data assets and scenes, wires references,
+    /// Editor automation for Golden Hour v2: creates data assets and scenes, wires references,
     /// configures build settings, validates the project and builds the Windows player.
     /// All entry points work from the menu and from -batchmode -executeMethod.
     /// </summary>
@@ -25,24 +25,25 @@ namespace GoldenHour.EditorTools
     {
         private const string GameScenePath = "Assets/Scenes/Samplespace.unity";
         private const string MenuScenePath = "Assets/GoldenHour/Scenes/MainMenu.unity";
-        private const string DataPath = "Assets/GoldenHour/ScriptableObjects/";
         private const string AudioPath = "Assets/GoldenHour/Audio/";
         private const string ModelPath = "Assets/GoldenHour/Blender/Exports/";
         private const string BaseMaterialPath = "Assets/GoldenHour/Materials/GH_RuntimeBase.mat";
         private const string UnlitMaterialPath = "Assets/GoldenHour/Materials/GH_RuntimeUnlit.mat";
+        private const string OutlineMaterialPath = "Assets/GoldenHour/Materials/GH_Outline.mat";
         private const string SmokeMaterialPath = "Assets/GoldenHour/Materials/GH_Smoke.mat";
+        private const string RainMaterialPath = "Assets/GoldenHour/Materials/GH_Rain.mat";
         private const string SmokeTexturePath = "Assets/GoldenHour/Materials/GH_SmokePuff.png";
         private const string SkyMaterialPath = "Assets/GoldenHour/Materials/GH_LateAfternoonSky.mat";
         private const string PostProfilePath = "Assets/GoldenHour/Settings/GH_PostProcessing.asset";
         private const string PcPipelinePath = "Assets/Settings/PC_RPAsset.asset";
-        private static readonly string[] AudioClips =
-        {
-            "Roadside_Ambience", "UI_Click", "UI_Hover", "Footstep", "Kit_Open", "Objective_Complete", "Patient_Interaction"
-        };
         private const string BuildPath = "Builds/GoldenHour/GoldenHour.exe";
 
-        private static readonly string[] PatientIds = { "P01", "P02", "P03", "P04", "P05" };
-        private static readonly string[] SupplyIds = { "Gloves", "Dressing", "Gauze", "Bandage", "EmergencyBlanket" };
+        private static readonly string[] AudioClips =
+        {
+            "Roadside_Ambience", "UI_Click", "UI_Hover", "Footstep", "Kit_Open", "Objective_Complete", "Patient_Interaction",
+            "Siren", "Radio_Static", "Voice_Murmur", "Heartbeat", "Breathing", "Rain_Loop", "Wind_Loop", "Music_Pad", "Music_Pulse",
+            "Music_Drums", "Metronome", "Compression"
+        };
 
         [MenuItem("GoldenHour/Build Project")]
         public static void BuildProject()
@@ -50,11 +51,11 @@ namespace GoldenHour.EditorTools
             EnsureDirectories();
             CreateBaseMaterial();
             CreateVisualAssets();
-            CreateGameData();
+            ScenarioCatalog catalog = GoldenHourContent.CreateAll();
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            CreateMainMenuScene();
-            ConfigureGameplayScene();
+            CreateMainMenuScene(catalog);
+            ConfigureGameplayScene(catalog);
             ConfigureBuildSettings();
             AssetDatabase.SaveAssets();
             DeleteTemplateLeftovers();
@@ -67,103 +68,99 @@ namespace GoldenHour.EditorTools
         public static void ValidateProject()
         {
             ValidateTriageRules();
-            List<PatientData> patients = LoadPatients();
-            Require(patients.Count == 5, "Expected exactly five PatientData assets.");
-            Require(patients.Select(item => item.patientId).Distinct().Count() == 5,
-                "Patient identifiers must be unique.");
-            foreach (PatientData patient in patients)
+            ScenarioCatalog catalog = GoldenHourContent.LoadCatalog();
+            Require(catalog != null && catalog.scenarios.Count == 4, "The campaign must contain four scenarios.");
+            string[] expectedIds = { "tutorial", "highway", "bus", "building" };
+            for (int i = 0; i < expectedIds.Length; i++)
             {
-                Require(TriageEvaluator.Evaluate(patient) == patient.correctTriage,
-                    patient.patientId + " observations do not match its expected triage under the game rule.");
-                Require(!string.IsNullOrWhiteSpace(patient.patientName) && patient.age > 0 &&
-                        !string.IsNullOrWhiteSpace(patient.injuryDescription) &&
-                        !string.IsNullOrWhiteSpace(patient.symptoms) &&
-                        !string.IsNullOrWhiteSpace(patient.responsiveness) &&
-                        !string.IsNullOrWhiteSpace(patient.reasoning) &&
-                        !string.IsNullOrWhiteSpace(patient.aidAction),
-                    patient.patientId + " is missing identity, observation, reasoning or aid text.");
-                Require(patient.recommendedSupply != null, patient.patientId + " needs a recommended supply.");
+                Require(catalog.scenarios[i] != null && catalog.scenarios[i].scenarioId == expectedIds[i], "Scenario " + i + " must be " + expectedIds[i] + ".");
+                ValidateScenario(catalog.scenarios[i]);
             }
 
-            int red = patients.Count(item => item.correctTriage == TriageCategory.Red);
-            int yellow = patients.Count(item => item.correctTriage == TriageCategory.Yellow);
-            int green = patients.Count(item => item.correctTriage == TriageCategory.Green);
-            Require(red >= 1 && red <= 2, "Expected 1-2 RED patients, found " + red + ".");
-            Require(yellow == 2, "Expected 2 YELLOW patients, found " + yellow + ".");
-            Require(green >= 1 && green <= 2, "Expected 1-2 GREEN patients, found " + green + ".");
+            Require(catalog.scenarios[0].casualties.Count == 3 && catalog.scenarios[0].tutorial && catalog.scenarios[0].tutorialSteps.Length >= 6,
+                "Tutorial needs 3 casualties and guided steps.");
+            Require(catalog.scenarios[2].casualties.Count >= 9 && catalog.scenarios[2].night && catalog.scenarios[2].rain,
+                "Bus rollover needs ~10 casualties at night in the rain.");
+            Require(catalog.scenarios[2].hazards.Exists(h => h.type == HazardType.FuelLeak) && catalog.scenarios[2].hazards.Exists(h => h.type == HazardType.Fire),
+                "Bus rollover needs fuel-leak and fire hazards.");
+            Require(catalog.scenarios[3].casualties.Count >= 11, "Building collapse needs ~12 casualties.");
+            Require(catalog.scenarios[3].casualties.Count(c => c.profile.variant == BodyVariant.Child) >= 2, "Building collapse needs children.");
+            Require(catalog.scenarios[3].casualties.Count(c => c.profile.initial.canWalk) >= 4, "Building collapse needs a crowd of walking wounded.");
+            Require(catalog.scenarios.SelectMany(s => s.casualties).Any(c => c.profile.variant == BodyVariant.Motorcyclist),
+                "A helmeted motorcyclist casualty is required.");
+            HashSet<TriageTag> categories = new HashSet<TriageTag>(catalog.scenarios.SelectMany(s => s.casualties)
+                .Select(c => StartTriage.Evaluate(c.profile.initial)));
+            Require(categories.SetEquals(new[] { TriageTag.Red, TriageTag.Yellow, TriageTag.Green, TriageTag.Black }),
+                "The campaign must use all four START categories.");
 
-            List<SupplyData> supplies = LoadSupplies();
-            Require(supplies.Count == 5, "Expected five SupplyData assets.");
-            Require(File.Exists(GameScenePath), "Gameplay scene is missing.");
-            Require(File.Exists(MenuScenePath), "Main menu scene is missing.");
-            Require(EditorBuildSettings.scenes.Length >= 2 &&
-                    EditorBuildSettings.scenes[0].path == MenuScenePath &&
-                    HasSceneInBuildSettings(GameScenePath),
+            Require(File.Exists(GameScenePath) && File.Exists(MenuScenePath), "Game and menu scenes are required.");
+            Require(EditorBuildSettings.scenes.Length >= 2 && EditorBuildSettings.scenes[0].path == MenuScenePath &&
+                    EditorBuildSettings.scenes.Any(s => s.enabled && s.path == GameScenePath),
                 "Build Settings must list MainMenu first and the gameplay scene.");
             foreach (string model in new[] { "LowPolyMannequin", "FirstAidKit", "RoadBarrier", "AccidentProps", "DamagedCar" })
             {
-                Require(AssetDatabase.LoadAssetAtPath<GameObject>(ModelPath + model + ".fbx") != null,
-                    "Blender export " + model + ".fbx is missing or not imported.");
+                Require(AssetDatabase.LoadAssetAtPath<GameObject>(ModelPath + model + ".fbx") != null, "Blender export " + model + ".fbx is missing.");
             }
 
-            GameObject kit = AssetDatabase.LoadAssetAtPath<GameObject>(ModelPath + "FirstAidKit.fbx");
-            Require(kit.GetComponentsInChildren<Transform>().Any(item => item.name == "KitHinge"),
-                "FirstAidKit.fbx must contain the KitHinge lid pivot.");
-            foreach (string clip in AudioClips)
-            {
-                LoadClip(clip + ".wav");
-            }
+            foreach (string clip in AudioClips) LoadClip(clip + ".wav");
 
             Scene game = EditorSceneManager.OpenScene(GameScenePath, OpenSceneMode.Single);
-            Require(GameObject.Find("Player") != null, "Existing Player object is missing.");
-            Require(GameObject.Find("GameManager") != null, "Existing GameManager is missing.");
-            Require(GameObject.Find("ScoreManager") != null, "Existing ScoreManager is missing.");
-            Require(GameObject.Find("EventSystem") != null, "EventSystem is missing.");
-            GameplayController gameplay = UnityEngine.Object.FindAnyObjectByType<GameplayController>();
-            Require(gameplay != null, "GameplayController is missing.");
-            Require(gameplay.patientProfiles.Count == 5 && gameplay.supplies.Count == 5 &&
-                    gameplay.baseMaterial != null && gameplay.unlitMaterial != null &&
-                    gameplay.mannequinPrefab != null && gameplay.kitPrefab != null,
-                "GameplayController references are not fully assigned.");
-            AccidentEnvironment environment = gameplay.GetComponent<AccidentEnvironment>();
-            Require(environment != null && environment.carPrefab != null && environment.barrierPrefab != null &&
-                    environment.conePrefab != null && environment.smokeMaterial != null,
-                "AccidentEnvironment prefab/material references are not assigned.");
-            GoldenHourAudio gameAudio = gameplay.GetComponent<GoldenHourAudio>();
-            Require(gameAudio != null && gameAudio.footstep != null && gameAudio.buttonHover != null,
-                "Gameplay audio needs footstep and hover clips.");
-            Require(RenderSettings.fog && RenderSettings.skybox != null &&
-                    RenderSettings.skybox.shader.name == "Skybox/Procedural",
-                "Gameplay scene needs fog and the late-afternoon skybox.");
-            Camera playerView = UnityEngine.Object.FindAnyObjectByType<FirstPersonPlayer>().GetComponentInChildren<Camera>();
-            Require(playerView != null && playerView.GetUniversalAdditionalCameraData().renderPostProcessing,
-                "Player camera must render post-processing.");
+            Require(GameObject.Find("Player") != null && GameObject.Find("EventSystem") != null, "Player and EventSystem are required.");
+            IncidentDirector director = UnityEngine.Object.FindAnyObjectByType<IncidentDirector>();
+            Require(director != null, "IncidentDirector is missing from the gameplay scene.");
+            Require(director.catalog == catalog && director.baseMaterial != null && director.unlitMaterial != null && director.kitPrefab != null &&
+                    director.outlineMaterial != null && director.environmentAssets.smokeMaterial != null && director.environmentAssets.carPrefab != null,
+                "IncidentDirector references are not fully assigned.");
+            Require(director.GetComponent<AccidentEnvironment>() != null && director.GetComponent<GoldenHourAudio>() != null,
+                "The director needs AccidentEnvironment and GoldenHourAudio.");
+            GoldenHourAudio gameAudio = director.GetComponent<GoldenHourAudio>();
+            Require(gameAudio.siren != null && gameAudio.radioStatic != null && gameAudio.musicPad != null && gameAudio.heartbeat != null,
+                "Gameplay audio clips are not assigned.");
+            Require(UnityEngine.Object.FindAnyObjectByType<InputSystemUIInputModule>() != null &&
+                    UnityEngine.Object.FindAnyObjectByType<StandaloneInputModule>() == null, "Gameplay must use the Input System UI module only.");
+            Require(RenderSettings.fog && RenderSettings.skybox != null, "Gameplay scene needs fog and a skybox.");
+            Camera view = UnityEngine.Object.FindAnyObjectByType<FirstPersonPlayer>().GetComponentInChildren<Camera>();
+            Require(view != null && view.GetUniversalAdditionalCameraData().renderPostProcessing, "Player camera must render post-processing.");
             Volume volume = UnityEngine.Object.FindAnyObjectByType<Volume>();
-            Require(volume != null && volume.isGlobal && volume.sharedProfile != null &&
-                    AssetDatabase.GetAssetPath(volume.sharedProfile) == PostProfilePath &&
-                    volume.sharedProfile.Has<Bloom>() && volume.sharedProfile.Has<Vignette>() &&
-                    volume.sharedProfile.Has<ColorAdjustments>() && volume.sharedProfile.Has<Tonemapping>(),
-                "Global Volume must use the Golden Hour post-processing profile (bloom, vignette, colour grading).");
-            Require(UnityEngine.Object.FindAnyObjectByType<FirstPersonPlayer>() != null, "FirstPersonPlayer is missing.");
-            Require(UnityEngine.Object.FindAnyObjectByType<InputSystemUIInputModule>() != null,
-                "Gameplay EventSystem does not use the Input System UI module.");
-            Require(UnityEngine.Object.FindAnyObjectByType<StandaloneInputModule>() == null,
-                "Legacy StandaloneInputModule must not be present.");
-            Require(UnityEngine.Object.FindAnyObjectByType<AudioListener>() != null, "Gameplay AudioListener is missing.");
+            Require(volume != null && volume.sharedProfile != null && volume.sharedProfile.Has<Bloom>() && volume.sharedProfile.Has<Vignette>(),
+                "Global Volume must use the post-processing profile.");
+            Require(UnityEngine.Object.FindAnyObjectByType<IncidentDirector>() != null, "The gameplay scene needs an IncidentDirector.");
             EditorSceneManager.CloseScene(game, true);
 
             Scene menu = EditorSceneManager.OpenScene(MenuScenePath, OpenSceneMode.Single);
-            Require(UnityEngine.Object.FindAnyObjectByType<MainMenuController>() != null, "MainMenuController is missing.");
-            Require(UnityEngine.Object.FindAnyObjectByType<InputSystemUIInputModule>() != null,
-                "Main menu does not use the Input System UI module.");
-            Require(UnityEngine.Object.FindAnyObjectByType<Camera>() != null &&
-                    UnityEngine.Object.FindAnyObjectByType<AudioListener>() != null,
+            MainMenuController menuController = UnityEngine.Object.FindAnyObjectByType<MainMenuController>();
+            Require(menuController != null && menuController.catalog == catalog, "MainMenuController with the campaign catalog is missing.");
+            Require(UnityEngine.Object.FindAnyObjectByType<InputSystemUIInputModule>() != null, "Main menu does not use the Input System UI module.");
+            Require(UnityEngine.Object.FindAnyObjectByType<Camera>() != null && UnityEngine.Object.FindAnyObjectByType<AudioListener>() != null,
                 "Main menu needs a camera and an AudioListener.");
             EditorSceneManager.CloseScene(menu, true);
-            Require(!AssetDatabase.IsValidFolder("Assets/TutorialInfo") &&
-                    AssetDatabase.LoadMainAssetAtPath("Assets/Readme.asset") == null,
+            Require(!AssetDatabase.IsValidFolder("Assets/TutorialInfo") && AssetDatabase.LoadMainAssetAtPath("Assets/Readme.asset") == null,
                 "Template leftovers are still present.");
             Debug.Log("Golden Hour project validation passed.");
+        }
+
+        private static void ValidateScenario(ScenarioData scenario)
+        {
+            Require(!string.IsNullOrEmpty(scenario.title) && !string.IsNullOrEmpty(scenario.briefing), scenario.scenarioId + " needs a title and briefing.");
+            Require(scenario.casualties.Count > 0 && scenario.casualties.All(c => c.profile != null), scenario.scenarioId + " has missing casualty profiles.");
+            Require(scenario.casualties.Select(c => c.profile.casualtyId).Distinct().Count() == scenario.casualties.Count,
+                scenario.scenarioId + " casualty IDs must be unique.");
+            Require(scenario.locationOptions.Length >= 2 && scenario.correctLocation >= 0 && scenario.correctLocation < scenario.locationOptions.Length,
+                scenario.scenarioId + " needs dispatch location options.");
+            Require(scenario.waves.Count > 0 && scenario.hazards.Count > 0, scenario.scenarioId + " needs ambulance waves and hazards.");
+            int stretcherCases = scenario.casualties.Count(c => StartTriage.Evaluate(c.profile.initial) != TriageTag.Black && !c.profile.initial.canWalk);
+            Require(scenario.TotalAmbulanceCapacity >= stretcherCases, scenario.scenarioId + ": ambulance capacity is below the stretcher cases.");
+            Require(scenario.simMinutesPerSecond > 0f && scenario.goldenHourMinutes > 0f, scenario.scenarioId + " needs a valid clock.");
+            foreach (CasualtyPlacement placement in scenario.casualties)
+            {
+                CasualtyProfile profile = placement.profile;
+                Require(!string.IsNullOrEmpty(profile.appearance) && !string.IsNullOrEmpty(profile.injurySummary),
+                    profile.casualtyId + " needs appearance and injury text.");
+                if (profile.deathMinute > 0f && profile.condition == CriticalCondition.Haemorrhage)
+                {
+                    Require((profile.stabilisedBy & Treatment.PressureDressing) != 0, profile.casualtyId + " bleeding must be stabilised by a dressing.");
+                }
+            }
         }
 
         [MenuItem("GoldenHour/Build Windows Player")]
@@ -181,22 +178,20 @@ namespace GoldenHour.EditorTools
             BuildReport report = BuildPipeline.BuildPlayer(options);
             if (report.summary.result != BuildResult.Succeeded)
             {
-                throw new BuildFailedException("Windows build failed: " +
-                    report.summary.result + " (" + report.summary.totalErrors + " errors).");
+                throw new BuildFailedException("Windows build failed: " + report.summary.result + " (" + report.summary.totalErrors + " errors).");
             }
 
-            Debug.Log("Windows build created at " + outputPath + " | bytes: " + report.summary.totalSize +
-                      " | warnings: " + report.summary.totalWarnings);
+            Debug.Log("Windows build created at " + outputPath + " | bytes: " + report.summary.totalSize + " | warnings: " + report.summary.totalWarnings);
         }
 
-        // ------------------------------------------------------------------ data
+        // ---------------------------------------------------------------- assets
 
         private static void EnsureDirectories()
         {
             foreach (string directory in new[]
                      {
-                         "Assets/GoldenHour/Scenes", "Assets/GoldenHour/ScriptableObjects",
-                         "Assets/GoldenHour/Materials", "Assets/GoldenHour/Audio", "Assets/GoldenHour/Settings"
+                         "Assets/GoldenHour/Scenes", "Assets/GoldenHour/ScriptableObjects", "Assets/GoldenHour/Materials", "Assets/GoldenHour/Audio",
+                         "Assets/GoldenHour/Settings"
                      })
             {
                 Directory.CreateDirectory(directory);
@@ -207,44 +202,27 @@ namespace GoldenHour.EditorTools
 
         private static void CreateBaseMaterial()
         {
-            Material material = AssetDatabase.LoadAssetAtPath<Material>(BaseMaterialPath);
-            if (material == null)
-            {
-                Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-                Require(shader != null, "URP Lit shader not found.");
-                material = new Material(shader) { name = "GH_RuntimeBase" };
-                AssetDatabase.CreateAsset(material, BaseMaterialPath);
-            }
-
+            Material material = LoadOrCreateMaterial(BaseMaterialPath, "Universal Render Pipeline/Lit");
             material.color = Color.white;
             EditorUtility.SetDirty(material);
         }
 
-        /// <summary>
-        /// Serialized materials (so shaders/variants ship in the build), the smoke texture, the
-        /// late-afternoon skybox, the post-processing profile and laptop-friendly shadow settings.
-        /// </summary>
         private static void CreateVisualAssets()
         {
             Material unlit = LoadOrCreateMaterial(UnlitMaterialPath, "Universal Render Pipeline/Unlit");
             unlit.SetColor("_BaseColor", Color.white);
             EditorUtility.SetDirty(unlit);
 
+            Material outline = LoadOrCreateMaterial(OutlineMaterialPath, "Universal Render Pipeline/Unlit");
+            outline.SetColor("_BaseColor", new Color(1f, 0.85f, 0.35f));
+            outline.SetFloat("_Cull", (float)CullMode.Front);
+            EditorUtility.SetDirty(outline);
+
             Texture2D puff = CreateSmokeTexture();
             Material smoke = LoadOrCreateMaterial(SmokeMaterialPath, "Universal Render Pipeline/Particles/Unlit");
-            smoke.SetFloat("_Surface", 1f);
-            smoke.SetFloat("_Blend", 0f);
-            smoke.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
-            smoke.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
-            smoke.SetFloat("_SrcBlendAlpha", (float)BlendMode.One);
-            smoke.SetFloat("_DstBlendAlpha", (float)BlendMode.OneMinusSrcAlpha);
-            smoke.SetFloat("_ZWrite", 0f);
-            smoke.SetOverrideTag("RenderType", "Transparent");
-            smoke.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            smoke.renderQueue = (int)RenderQueue.Transparent;
-            smoke.SetTexture("_BaseMap", puff);
-            smoke.SetColor("_BaseColor", Color.white);
-            EditorUtility.SetDirty(smoke);
+            ConfigureTransparentParticle(smoke, puff, Color.white);
+            Material rain = LoadOrCreateMaterial(RainMaterialPath, "Universal Render Pipeline/Particles/Unlit");
+            ConfigureTransparentParticle(rain, puff, new Color(0.75f, 0.82f, 0.95f, 0.6f));
 
             Material sky = LoadOrCreateMaterial(SkyMaterialPath, "Skybox/Procedural");
             sky.SetFloat("_SunSize", 0.05f);
@@ -283,7 +261,6 @@ namespace GoldenHour.EditorTools
             tonemapping.mode.Override(TonemappingMode.Neutral);
             EditorUtility.SetDirty(profile);
 
-            // Laptop-friendly shadows: shorter distance, two cascades, soft shadows kept.
             UniversalRenderPipelineAsset pipeline = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(PcPipelinePath);
             if (pipeline != null)
             {
@@ -291,6 +268,23 @@ namespace GoldenHour.EditorTools
                 pipeline.shadowCascadeCount = 2;
                 EditorUtility.SetDirty(pipeline);
             }
+        }
+
+        private static void ConfigureTransparentParticle(Material material, Texture2D texture, Color color)
+        {
+            material.SetFloat("_Surface", 1f);
+            material.SetFloat("_Blend", 0f);
+            material.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            material.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            material.SetFloat("_SrcBlendAlpha", (float)BlendMode.One);
+            material.SetFloat("_DstBlendAlpha", (float)BlendMode.OneMinusSrcAlpha);
+            material.SetFloat("_ZWrite", 0f);
+            material.SetOverrideTag("RenderType", "Transparent");
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.renderQueue = (int)RenderQueue.Transparent;
+            material.SetTexture("_BaseMap", texture);
+            material.SetColor("_BaseColor", color);
+            EditorUtility.SetDirty(material);
         }
 
         private static T ProfileComponent<T>(VolumeProfile profile) where T : VolumeComponent
@@ -321,7 +315,6 @@ namespace GoldenHour.EditorTools
             return material;
         }
 
-        /// <summary>Soft round puff (white, radial alpha) for the smoke particles.</summary>
         private static Texture2D CreateSmokeTexture()
         {
             if (!File.Exists(SmokeTexturePath))
@@ -334,8 +327,7 @@ namespace GoldenHour.EditorTools
                     {
                         float dx = (x + 0.5f) / size * 2f - 1f;
                         float dy = (y + 0.5f) / size * 2f - 1f;
-                        float distance = Mathf.Sqrt(dx * dx + dy * dy);
-                        float alpha = Mathf.Clamp01(1f - distance);
+                        float alpha = Mathf.Clamp01(1f - Mathf.Sqrt(dx * dx + dy * dy));
                         alpha = alpha * alpha * (3f - 2f * alpha);
                         texture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
                     }
@@ -358,153 +350,57 @@ namespace GoldenHour.EditorTools
             return AssetDatabase.LoadAssetAtPath<Texture2D>(SmokeTexturePath);
         }
 
-        private static void CreateGameData()
-        {
-            SupplyData gloves = CreateSupply("Gloves", "Disposable Gloves",
-                "Protective barrier for the rescuer",
-                "Gloves protect you and the person from infection before any contact - the first step in every scenario.",
-                new Color32(70, 130, 180, 255));
-            SupplyData dressing = CreateSupply("Dressing", "Trauma Dressing",
-                "Large pad for heavy bleeding",
-                "A large dressing pad covers a heavily bleeding wound so firm pressure can be held over it.",
-                new Color32(60, 140, 96, 255));
-            SupplyData gauze = CreateSupply("Gauze", "Sterile Gauze Pads",
-                "Clean cover for small cuts",
-                "Sterile gauze keeps a small cut or graze clean and covered.",
-                new Color32(225, 225, 214, 255));
-            SupplyData bandage = CreateSupply("Bandage", "Triangular Bandage",
-                "Support for an injured limb",
-                "A triangular bandage can form a sling or padding to support and steady an injured limb.",
-                new Color32(214, 182, 112, 255));
-            SupplyData blanket = CreateSupply("EmergencyBlanket", "Emergency Blanket",
-                "Keeps a person warm and reassured",
-                "A foil blanket helps keep a shaken person warm while they wait for help.",
-                new Color32(212, 170, 60, 255));
-
-            CreatePatient("P01", "Alex Morgan", 28, new Color32(70, 120, 160, 255),
-                "Small graze on the forearm; standing beside the road.",
-                "Walked over to you unaided. Says they feel shaken and cold.",
-                "Alert, talking and follows instructions.",
-                breathing: true, severeBleeding: false, canWalk: true, followsCommands: true,
-                TriageCategory.Green,
-                "Alex can walk. In this simplified START-style model, anyone who can walk is GREEN (minor) and is re-checked later.",
-                blanket, "Wrap the emergency blanket around Alex's shoulders and keep them company away from traffic.");
-            CreatePatient("P02", "Jordan Lee", 42, new Color32(150, 70, 60, 255),
-                "Deep cut on the upper arm with heavy, continuous bleeding.",
-                "Lying on the road, pale and anxious. Says they feel dizzy.",
-                "Awake and follows simple instructions.",
-                breathing: true, severeBleeding: true, canWalk: false, followsCommands: true,
-                TriageCategory.Red,
-                "Severe visible bleeding is a RED sign in this model, even though Jordan is awake and talking.",
-                dressing, "Place the trauma dressing over the wound and simulate holding firm pressure until help arrives.");
-            CreatePatient("P03", "Sam Rivera", 36, new Color32(90, 90, 120, 255),
-                "No visible major wound. Lying still near the car.",
-                "Does not respond to voice or a gentle shoulder tap. No breathing observed during the check.",
-                "Unresponsive.",
-                breathing: false, severeBleeding: false, canWalk: false, followsCommands: false,
-                TriageCategory.Red,
-                "Not breathing and unresponsive are RED signs in this model; this person needs immediate professional help.",
-                gloves, "Put on gloves before contact and call loudly for the arriving paramedics - this scenario marks Sam for immediate professional care.");
-            CreatePatient("P04", "Taylor Kim", 51, new Color32(80, 120, 80, 255),
-                "Painful, swollen lower leg; cannot put weight on it. No heavy bleeding.",
-                "Lying on the road. Breathing normally and answering questions clearly.",
-                "Alert and follows instructions.",
-                breathing: true, severeBleeding: false, canWalk: false, followsCommands: true,
-                TriageCategory.Yellow,
-                "Taylor cannot walk but shows none of the RED signs, so the model assigns YELLOW (delayed).",
-                bandage, "Use the triangular bandage as padding to steady the leg in the position found, without moving it.");
-            CreatePatient("P05", "Casey Patel", 19, new Color32(130, 100, 150, 255),
-                "Small cut above the eyebrow and bruised ribs; minor bleeding only.",
-                "Lying down, says it hurts to stand. Breathing normally and talking.",
-                "Alert and follows instructions.",
-                breathing: true, severeBleeding: false, canWalk: false, followsCommands: true,
-                TriageCategory.Yellow,
-                "Casey cannot walk but is breathing, responsive and has no severe bleeding, so the model assigns YELLOW.",
-                gauze, "Cover the small cut with a sterile gauze pad and keep Casey still and reassured.");
-        }
-
-        private static SupplyData CreateSupply(string id, string displayName, string description,
-            string purpose, Color color)
-        {
-            string path = DataPath + "Supply_" + id + ".asset";
-            SupplyData asset = AssetDatabase.LoadAssetAtPath<SupplyData>(path);
-            if (asset == null)
-            {
-                asset = ScriptableObject.CreateInstance<SupplyData>();
-                AssetDatabase.CreateAsset(asset, path);
-            }
-
-            asset.supplyId = id;
-            asset.displayName = displayName;
-            asset.description = description;
-            asset.educationalPurpose = purpose;
-            asset.displayColor = color;
-            EditorUtility.SetDirty(asset);
-            return asset;
-        }
-
-        private static void CreatePatient(string id, string patientName, int age, Color clothing, string injury,
-            string symptoms, string responsiveness, bool breathing, bool severeBleeding,
-            bool canWalk, bool followsCommands, TriageCategory category, string reasoning,
-            SupplyData supply, string aidAction)
-        {
-            string path = DataPath + "Patient_" + id + ".asset";
-            PatientData asset = AssetDatabase.LoadAssetAtPath<PatientData>(path);
-            if (asset == null)
-            {
-                asset = ScriptableObject.CreateInstance<PatientData>();
-                AssetDatabase.CreateAsset(asset, path);
-            }
-
-            asset.patientId = id;
-            asset.patientName = patientName;
-            asset.age = age;
-            asset.clothingColor = clothing;
-            asset.injuryDescription = injury;
-            asset.symptoms = symptoms;
-            asset.responsiveness = responsiveness;
-            asset.breathing = breathing;
-            asset.severeBleeding = severeBleeding;
-            asset.canWalk = canWalk;
-            asset.followsCommands = followsCommands;
-            asset.correctTriage = category;
-            asset.reasoning = reasoning;
-            asset.recommendedSupply = supply;
-            asset.aidAction = aidAction;
-            EditorUtility.SetDirty(asset);
-        }
-
         // ---------------------------------------------------------------- scenes
 
-        private static void CreateMainMenuScene()
+        private static void CreateMainMenuScene(ScenarioCatalog catalog)
         {
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             GameObject cameraObject = new GameObject("Menu Camera", typeof(Camera), typeof(AudioListener));
             cameraObject.tag = "MainCamera";
             Camera camera = cameraObject.GetComponent<Camera>();
-            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.clearFlags = CameraClearFlags.Skybox;
             camera.backgroundColor = new Color32(14, 19, 25, 255);
+            camera.farClipPlane = 160f;
+            camera.transform.SetPositionAndRotation(new Vector3(9f, 4f, -6f), Quaternion.Euler(14f, -40f, 0f));
+            UniversalAdditionalCameraData cameraData = camera.GetUniversalAdditionalCameraData();
+            cameraData.renderPostProcessing = true;
+            cameraData.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
+
+            GameObject sun = new GameObject("Directional Light", typeof(Light));
+            Light light = sun.GetComponent<Light>();
+            light.type = LightType.Directional;
+            light.shadows = LightShadows.Soft;
+            RenderSettings.sun = light;
+            AccidentEnvironment.ApplyLighting();
+            RenderSettings.skybox = AssetDatabase.LoadAssetAtPath<Material>(SkyMaterialPath);
+            Volume volume = new GameObject("Global Volume").AddComponent<Volume>();
+            volume.isGlobal = true;
+            volume.sharedProfile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(PostProfilePath);
 
             GameObject menu = new GameObject("Main Menu");
-            menu.AddComponent<MainMenuController>();
+            MainMenuController controller = menu.AddComponent<MainMenuController>();
+            controller.catalog = catalog;
+            controller.baseMaterial = AssetDatabase.LoadAssetAtPath<Material>(BaseMaterialPath);
+            controller.unlitMaterial = AssetDatabase.LoadAssetAtPath<Material>(UnlitMaterialPath);
+            controller.menuCamera = camera;
+            AccidentEnvironment backdrop = menu.AddComponent<AccidentEnvironment>();
+            backdrop.carPrefab = LoadModel("DamagedCar");
+            backdrop.barrierPrefab = LoadModel("RoadBarrier");
+            backdrop.conePrefab = LoadModel("AccidentProps");
+            backdrop.smokeMaterial = AssetDatabase.LoadAssetAtPath<Material>(SmokeMaterialPath);
             AssignAudio(menu.AddComponent<GoldenHourAudio>());
             CreateEventSystem();
             EditorSceneManager.SaveScene(scene, MenuScenePath);
         }
 
-        private static void ConfigureGameplayScene()
+        private static void ConfigureGameplayScene(ScenarioCatalog catalog)
         {
             Scene scene = EditorSceneManager.OpenScene(GameScenePath, OpenSceneMode.Single);
             GameObject playerObject = GameObject.Find("Player");
             GameObject managerObject = GameObject.Find("GameManager");
-            GameObject scoreObject = GameObject.Find("ScoreManager");
             GameObject eventSystem = GameObject.Find("EventSystem");
-            Require(playerObject != null, "The existing Player object is required.");
-            Require(managerObject != null, "The existing GameManager object is required.");
-            Require(scoreObject != null, "The existing ScoreManager object is required.");
-            Require(eventSystem != null, "The existing EventSystem object is required.");
+            Require(playerObject != null && managerObject != null && eventSystem != null, "Player, GameManager and EventSystem objects are required.");
 
-            // Placeholder prototype content replaced by the generated scenario.
             DeleteNamedObject("Patient_Test");
             DeleteNamedObject("TestGround");
             DeleteNamedObject("GoldenHourUI");
@@ -515,7 +411,7 @@ namespace GoldenHour.EditorTools
             Camera camera = playerObject.GetComponentInChildren<Camera>();
             Require(camera != null, "The existing Player Camera child is required.");
             RemoveComponentIfPresent<global::PlayerLook>(camera.gameObject);
-            camera.transform.localPosition = new Vector3(0f, 1.52f, 0f);
+            camera.transform.localPosition = new Vector3(0f, FirstPersonPlayer.StandingEyeHeight, 0f);
             camera.transform.localRotation = Quaternion.identity;
             camera.nearClipPlane = 0.05f;
             camera.fieldOfView = 70f;
@@ -525,8 +421,8 @@ namespace GoldenHour.EditorTools
             cameraData.renderPostProcessing = true;
             cameraData.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
             EditorUtility.SetDirty(cameraData);
-            EditorUtility.SetDirty(camera);
             if (camera.GetComponent<AudioListener>() == null) camera.gameObject.AddComponent<AudioListener>();
+            if (camera.GetComponent<Viewmodel>() == null) camera.gameObject.AddComponent<Viewmodel>();
 
             CharacterController characterController = playerObject.GetComponent<CharacterController>();
             if (characterController == null) characterController = playerObject.AddComponent<CharacterController>();
@@ -535,43 +431,44 @@ namespace GoldenHour.EditorTools
             characterController.center = new Vector3(0f, 0.9f, 0f);
             characterController.stepOffset = 0.3f;
             characterController.skinWidth = 0.04f;
-            playerObject.transform.SetPositionAndRotation(AccidentEnvironment.PlayerStart, Quaternion.identity);
             FirstPersonPlayer controller = playerObject.GetComponent<FirstPersonPlayer>();
             if (controller == null) controller = playerObject.AddComponent<FirstPersonPlayer>();
             SerializedObject serializedPlayer = new SerializedObject(controller);
             serializedPlayer.FindProperty("cameraTransform").objectReferenceValue = camera.transform;
             serializedPlayer.ApplyModifiedPropertiesWithoutUndo();
 
-            GameManager gameManager = managerObject.GetComponent<GameManager>();
-            ScoreManager scoreManager = scoreObject.GetComponent<ScoreManager>();
-            Require(gameManager != null && scoreManager != null, "Existing manager scripts are required.");
-            gameManager.scenarioDuration = 900f;
-            scoreManager.ResetScore();
-            EditorUtility.SetDirty(gameManager);
-            EditorUtility.SetDirty(scoreManager);
+            GameObjectUtility.RemoveMonoBehavioursWithMissingScript(managerObject);
 
-            GameplayController gameplay = managerObject.GetComponent<GameplayController>();
-            if (gameplay == null) gameplay = managerObject.AddComponent<GameplayController>();
-            gameplay.gameManager = gameManager;
-            gameplay.scoreManager = scoreManager;
-            gameplay.player = controller;
-            gameplay.playerCamera = camera.transform;
-            gameplay.patientProfiles = LoadPatients();
-            gameplay.supplies = LoadSupplies();
-            gameplay.baseMaterial = AssetDatabase.LoadAssetAtPath<Material>(BaseMaterialPath);
-            gameplay.unlitMaterial = AssetDatabase.LoadAssetAtPath<Material>(UnlitMaterialPath);
-            gameplay.mannequinPrefab = LoadModel("LowPolyMannequin");
-            gameplay.kitPrefab = LoadModel("FirstAidKit");
-            Require(gameplay.patientProfiles.Count == 5, "Patient data assets were not created.");
-            Require(gameplay.supplies.Count == 5, "Supply data assets were not created.");
-            EditorUtility.SetDirty(gameplay);
+            IncidentDirector director = managerObject.GetComponent<IncidentDirector>();
+            if (director == null) director = managerObject.AddComponent<IncidentDirector>();
+            director.catalog = catalog;
+            director.fallbackScenario = catalog.scenarios[0];
+            director.player = controller;
+            director.playerCamera = camera.transform;
+            director.baseMaterial = AssetDatabase.LoadAssetAtPath<Material>(BaseMaterialPath);
+            director.unlitMaterial = AssetDatabase.LoadAssetAtPath<Material>(UnlitMaterialPath);
+            director.outlineMaterial = AssetDatabase.LoadAssetAtPath<Material>(OutlineMaterialPath);
+            director.kitPrefab = LoadModel("FirstAidKit");
+            director.humanRigPrefab = OptionalModel("RiggedHuman");
+            director.childRigPrefab = OptionalModel("RiggedHuman");
+            director.ambulancePrefab = OptionalModel("Ambulance");
+            director.environmentAssets.carPrefab = LoadModel("DamagedCar");
+            director.environmentAssets.barrierPrefab = LoadModel("RoadBarrier");
+            director.environmentAssets.conePrefab = LoadModel("AccidentProps");
+            director.environmentAssets.busPrefab = OptionalModel("Bus");
+            director.environmentAssets.policeCarPrefab = OptionalModel("PoliceCar");
+            director.environmentAssets.fireTruckPrefab = OptionalModel("FireTruck");
+            director.environmentAssets.motorbikePrefab = OptionalModel("Motorbike");
+            director.environmentAssets.smokeMaterial = AssetDatabase.LoadAssetAtPath<Material>(SmokeMaterialPath);
+            director.environmentAssets.rainMaterial = AssetDatabase.LoadAssetAtPath<Material>(RainMaterialPath);
+            EditorUtility.SetDirty(director);
 
             AccidentEnvironment environment = managerObject.GetComponent<AccidentEnvironment>();
             if (environment == null) environment = managerObject.AddComponent<AccidentEnvironment>();
-            environment.carPrefab = LoadModel("DamagedCar");
-            environment.barrierPrefab = LoadModel("RoadBarrier");
-            environment.conePrefab = LoadModel("AccidentProps");
-            environment.smokeMaterial = AssetDatabase.LoadAssetAtPath<Material>(SmokeMaterialPath);
+            environment.carPrefab = director.environmentAssets.carPrefab;
+            environment.barrierPrefab = director.environmentAssets.barrierPrefab;
+            environment.conePrefab = director.environmentAssets.conePrefab;
+            environment.smokeMaterial = director.environmentAssets.smokeMaterial;
             EditorUtility.SetDirty(environment);
 
             GoldenHourAudio gameAudio = managerObject.GetComponent<GoldenHourAudio>();
@@ -579,11 +476,8 @@ namespace GoldenHour.EditorTools
             AssignAudio(gameAudio);
             ConfigureEventSystem(eventSystem);
 
-            // Late-afternoon lighting and haze saved into the scene (so fog shader variants ship),
-            // the procedural skybox, and the post-processing volume.
             AccidentEnvironment.ApplyLighting();
-            Light sun = RenderSettings.sun;
-            if (sun != null) EditorUtility.SetDirty(sun);
+            if (RenderSettings.sun != null) EditorUtility.SetDirty(RenderSettings.sun);
             RenderSettings.skybox = AssetDatabase.LoadAssetAtPath<Material>(SkyMaterialPath);
             Volume volume = UnityEngine.Object.FindAnyObjectByType<Volume>();
             if (volume == null) volume = new GameObject("Global Volume").AddComponent<Volume>();
@@ -597,15 +491,11 @@ namespace GoldenHour.EditorTools
 
         private static void ConfigureBuildSettings()
         {
-            EditorBuildSettings.scenes = new[]
-            {
-                new EditorBuildSettingsScene(MenuScenePath, true),
-                new EditorBuildSettingsScene(GameScenePath, true)
-            };
+            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(MenuScenePath, true), new EditorBuildSettingsScene(GameScenePath, true) };
             PlayerSettings.companyName = "Golden Hour Learning";
             PlayerSettings.productName = "Golden Hour";
-            PlayerSettings.defaultScreenWidth = 1600;
-            PlayerSettings.defaultScreenHeight = 900;
+            PlayerSettings.defaultScreenWidth = 1920;
+            PlayerSettings.defaultScreenHeight = 1080;
             PlayerSettings.fullScreenMode = FullScreenMode.FullScreenWindow;
             PlayerSettings.resizableWindow = true;
             PlayerSettings.runInBackground = false;
@@ -613,8 +503,7 @@ namespace GoldenHour.EditorTools
 
         private static void CreateEventSystem()
         {
-            GameObject eventSystemObject = new GameObject("EventSystem",
-                typeof(EventSystem), typeof(InputSystemUIInputModule));
+            GameObject eventSystemObject = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
             eventSystemObject.GetComponent<InputSystemUIInputModule>().AssignDefaultActions();
         }
 
@@ -637,6 +526,18 @@ namespace GoldenHour.EditorTools
             audio.patientInteraction = LoadClip("Patient_Interaction.wav");
             audio.footstep = LoadClip("Footstep.wav");
             audio.buttonHover = LoadClip("UI_Hover.wav");
+            audio.siren = LoadClip("Siren.wav");
+            audio.radioStatic = LoadClip("Radio_Static.wav");
+            audio.voiceMurmur = LoadClip("Voice_Murmur.wav");
+            audio.heartbeat = LoadClip("Heartbeat.wav");
+            audio.breathing = LoadClip("Breathing.wav");
+            audio.rainLoop = LoadClip("Rain_Loop.wav");
+            audio.windLoop = LoadClip("Wind_Loop.wav");
+            audio.musicPad = LoadClip("Music_Pad.wav");
+            audio.musicPulse = LoadClip("Music_Pulse.wav");
+            audio.musicDrums = LoadClip("Music_Drums.wav");
+            audio.metronome = LoadClip("Metronome.wav");
+            audio.compression = LoadClip("Compression.wav");
             EditorUtility.SetDirty(audio);
         }
 
@@ -649,6 +550,8 @@ namespace GoldenHour.EditorTools
             return model;
         }
 
+        private static GameObject OptionalModel(string name) => AssetDatabase.LoadAssetAtPath<GameObject>(ModelPath + name + ".fbx");
+
         private static AudioClip LoadClip(string filename)
         {
             AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>(AudioPath + filename);
@@ -656,63 +559,25 @@ namespace GoldenHour.EditorTools
             return clip;
         }
 
-        private static List<PatientData> LoadPatients()
-        {
-            return PatientIds
-                .Select(id => AssetDatabase.LoadAssetAtPath<PatientData>(DataPath + "Patient_" + id + ".asset"))
-                .Where(asset => asset != null)
-                .ToList();
-        }
-
-        private static List<SupplyData> LoadSupplies()
-        {
-            return SupplyIds
-                .Select(id => AssetDatabase.LoadAssetAtPath<SupplyData>(DataPath + "Supply_" + id + ".asset"))
-                .Where(asset => asset != null)
-                .ToList();
-        }
-
         private static void ValidateTriageRules()
         {
-            PatientData sample = ScriptableObject.CreateInstance<PatientData>();
-            try
-            {
-                sample.canWalk = true;
-                sample.breathing = false;
-                sample.severeBleeding = true;
-                Require(TriageEvaluator.Evaluate(sample) == TriageCategory.Green, "Walking-patient rule failed.");
-
-                sample.canWalk = false;
-                sample.breathing = false;
-                sample.severeBleeding = false;
-                sample.followsCommands = true;
-                Require(TriageEvaluator.Evaluate(sample) == TriageCategory.Red, "Not-breathing rule failed.");
-
-                sample.breathing = true;
-                sample.severeBleeding = true;
-                Require(TriageEvaluator.Evaluate(sample) == TriageCategory.Red, "Severe-bleeding rule failed.");
-
-                sample.severeBleeding = false;
-                sample.followsCommands = false;
-                Require(TriageEvaluator.Evaluate(sample) == TriageCategory.Red, "Unresponsive rule failed.");
-
-                sample.followsCommands = true;
-                Require(TriageEvaluator.Evaluate(sample) == TriageCategory.Yellow, "Stable non-walking rule failed.");
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(sample);
-            }
-
+            PhysiologyState state = new PhysiologyState { canWalk = true, respiratoryRate = 40 };
+            Require(StartTriage.Evaluate(state) == TriageTag.Green, "Walking rule failed.");
+            state.canWalk = false;
+            Require(StartTriage.Evaluate(state) == TriageTag.Red, "Breathing-rate rule failed.");
+            state.respiratoryRate = 0;
+            Require(StartTriage.Evaluate(state) == TriageTag.Black, "Apnoea rule failed.");
+            state.respiratoryRate = 16;
+            state.capillaryRefill = 3f;
+            Require(StartTriage.Evaluate(state) == TriageTag.Red, "Circulation rule failed.");
+            state.capillaryRefill = 1.5f;
+            state.followsCommands = false;
+            Require(StartTriage.Evaluate(state) == TriageTag.Red, "Commands rule failed.");
+            state.followsCommands = true;
+            Require(StartTriage.Evaluate(state) == TriageTag.Yellow, "Delayed rule failed.");
             Debug.Log("Triage rule validation passed.");
         }
 
-        private static bool HasSceneInBuildSettings(string scenePath)
-        {
-            return EditorBuildSettings.scenes.Any(scene => scene.enabled && scene.path == scenePath);
-        }
-
-        /// <summary>Destroys a root-level scene object by name, if present.</summary>
         private static void DeleteNamedObject(string objectName)
         {
             GameObject target = GameObject.Find(objectName);

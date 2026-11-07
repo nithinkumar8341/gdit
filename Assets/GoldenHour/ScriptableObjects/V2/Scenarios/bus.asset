@@ -1,0 +1,117 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dcb1b260c9510d24f8f2bae071d6dbe1, type: 3}
+  m_Name: bus
+  m_EditorClassIdentifier: Assembly-CSharp::GoldenHour.ScenarioData
+  scenarioId: bus
+  title: Night Bus Rollover
+  description: A coach has rolled onto its side on a wet country road at night. Ten casualties, fuel leak and fire.
+  order: 2
+  nextScenarioId: building
+  tutorial: 0
+  environment: 2
+  night: 1
+  rain: 1
+  goldenHourMinutes: 60
+  simMinutesPerSecond: 0.08
+  seed: 303
+  playerStart: {x: 0, y: 0.1, z: -10}
+  playerYaw: 0
+  kitPosition: {x: -2, y: 0.02, z: -6.5}
+  greenZone: {x: -8.5, y: 0, z: 10}
+  ambulanceBay: {x: -2.5, y: 0, z: -14}
+  ambulanceSpawn: {x: -2.5, y: 0, z: -52}
+  flythrough:
+  - {x: -10, y: 10, z: 34}
+  - {x: -8, y: 6, z: 18}
+  - {x: -4, y: 4, z: 2}
+  - {x: 0, y: 2.2, z: -10.5}
+  casualties:
+  - profile: {fileID: 11400000, guid: 345718faf9a44f24e806feec5caaae0e, type: 2}
+    position: {x: -3.5, y: 0, z: 4}
+    yaw: 160
+  - profile: {fileID: 11400000, guid: e953f023daf76ba4db0214e903278f35, type: 2}
+    position: {x: -4, y: 0, z: 8}
+    yaw: 120
+  - profile: {fileID: 11400000, guid: ecf60c422119b9b41b443186410d6676, type: 2}
+    position: {x: -2.5, y: 0, z: 14}
+    yaw: 200
+  - profile: {fileID: 11400000, guid: c5c11d9565aa9434c9787a9a80fca445, type: 2}
+    position: {x: 0, y: 0, z: 3}
+    yaw: 90
+  - profile: {fileID: 11400000, guid: e8465d8ba8319414ea959d813883ebcf, type: 2}
+    position: {x: -1.5, y: 0, z: 19}
+    yaw: 200
+  - profile: {fileID: 11400000, guid: ca4cf5c0e3b35e54ab413f0a14c1b3db, type: 2}
+    position: {x: 6.5, y: 0, z: 6}
+    yaw: 0
+  - profile: {fileID: 11400000, guid: 35268f831e915fd4c9ad82d5237c0e95, type: 2}
+    position: {x: 7, y: 0, z: 14}
+    yaw: 180
+  - profile: {fileID: 11400000, guid: 0327bb0c6370d404d9b5392c84379384, type: 2}
+    position: {x: -0.5, y: 0, z: 9}
+    yaw: 60
+  - profile: {fileID: 11400000, guid: 21a1c06e81dc1094cbf48dc5d955e3c4, type: 2}
+    position: {x: 1, y: 0, z: 21.5}
+    yaw: 120
+  - profile: {fileID: 11400000, guid: 5603e52ba1cb5624faf56c1f004ae14d, type: 2}
+    position: {x: 5.5, y: 0, z: 22.5}
+    yaw: 170
+  hazards:
+  - type: 0
+    position: {x: 0, y: 0, z: -20}
+    yaw: 0
+    radius: 2
+  - type: 1
+    position: {x: 2.2, y: 0, z: 5}
+    yaw: 0
+    radius: 1.6
+  - type: 2
+    position: {x: 4.4, y: 0, z: 18.4}
+    yaw: 0
+    radius: 2.5
+  waves:
+  - minute: 8
+    capacity: 2
+  - minute: 15
+    capacity: 3
+  - minute: 22
+    capacity: 3
+  - minute: 30
+    capacity: 2
+  radio:
+  - minute: 0
+    text: 'Incident command: multiple casualties reported on Moor Road. You are first on scene. Safety, then report.'
+  - minute: 12
+    text: 'Incident command: more units are coming but the road is flooding. Use the green zone for anyone who can walk.'
+  - minute: 26
+    text: 'Fire service: we''re on scene at the bus fire. Keep casualties clear of the rear.'
+  bystanders: 2
+  locationOptions:
+  - B4210 Moor Road, by the reservoir
+  - A31 Exit 12 roundabout
+  - Central bus station
+  correctLocation: 0
+  gloves: 2
+  dressings: 1
+  blankets: 2
+  briefing: '11:40 pm, heavy rain. A coach has rolled onto its side on the B4210 Moor Road by the reservoir. You stopped your car behind it. Diesel is leaking, the engine compartment is burning, and passengers are climbing out. Supplies are limited: one pressure dressing and two blankets. Choose carefully.'
+  loadingTips:
+  - 'START takes about 30-60 seconds per person: walking, breathing, circulation, commands.'
+  - Shout "if you can walk, go to the green zone" first - it sorts the walking wounded in seconds.
+  - 'Capillary refill: press a fingernail and count how long the colour takes to return. Over 2 seconds is poor circulation.'
+  - Open the airway of anyone not breathing. If they start breathing, they are RED. If not, BLACK.
+  - Gloves first. Every hands-on check without gloves costs points.
+  - Conditions change. Re-check people - a justified re-tag earns credit.
+  - Hand over RED before YELLOW, YELLOW before GREEN. Never send someone tagged BLACK.
+  - This is an educational model, not medical training. Check real procedures with a qualified first-aid trainer.
+  tutorialSteps: []

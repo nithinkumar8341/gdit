@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -13,6 +13,9 @@ namespace GoldenHour
 
         public static Action ButtonPressed;
 
+        /// <summary>Canvas reference resolution; a larger text scale shrinks it so all UI grows.</summary>
+        public static Vector2 ReferenceResolution => new Vector2(1600f, 900f) / GameSettings.TextScale;
+
         public static Canvas CreateCanvas(string canvasName)
         {
             GameObject canvasObject = new GameObject(canvasName,
@@ -23,7 +26,7 @@ namespace GoldenHour
             canvas.sortingOrder = 10;
             CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1600f, 900f);
+            scaler.referenceResolution = ReferenceResolution;
             scaler.matchWidthOrHeight = 0.5f;
             return canvas;
         }

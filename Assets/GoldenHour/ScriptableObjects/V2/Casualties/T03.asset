@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d3bd43d53b3c3b245b9ddca6b446f3f6, type: 3}
+  m_Name: T03
+  m_EditorClassIdentifier: GoldenHour.Core::GoldenHour.CasualtyProfile
+  casualtyId: T03
+  displayName: Sam Ito
+  age: 52
+  variant: 0
+  pose: 2
+  clothingColor: {r: 0.43137255, g: 0.43137255, b: 0.4509804, a: 1}
+  appearance: lying still on their back by the wall.
+  injurySummary: Hit their head. Breathing but not responding.
+  initial:
+    canWalk: 0
+    airwayObstructed: 0
+    airwayOpened: 0
+    respiratoryRate: 14
+    capillaryRefill: 1.8
+    radialPulse: 1
+    followsCommands: 0
+    bleeding: 0
+    bleedingControlled: 0
+    deceased: 0
+  condition: 2
+  deathMinute: 26
+  worsenMinute: 0
+  worsenedRespiratoryRate: 0
+  worsenedCapillaryRefill: 0
+  worsenedLosesCommands: 0
+  capillaryRefillRisePerMinute: 0
+  stabilisedBy: 4
+  airwayOpeningDelayMinutes: 8
+  indicatedTreatments: 4
+  aidNote: An unresponsive person who is breathing goes into the recovery position to keep the airway open.
+  barks: []
