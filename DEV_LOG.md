@@ -92,3 +92,8 @@
   - **Rewritten:** README.md for v2.
   - **Feedback screen:** the in-game questionnaire (main menu → Feedback) saves JSON. This is verified by the autotest.
   - **Medical references:** named only as well-known public guidance and marked *(verify)*. The documents state that the content has NOT been medically reviewed.
+- **M10 (final build):**
+  - **Build:** `Builds/GoldenHour/GoldenHour.exe`.
+  - **Release:** `Release/GoldenHour_Windows.zip` (40.2 MB, 202 entries; includes README and ASSET_CREDITS). It contains no `BackUpThisFolder` folder and is git-ignored.
+  - **Verification:** the zip was extracted to a clean folder and the full autotest was run from the extracted exe: **257/257 checks pass**, 0 errors or exceptions, exit code 0.
+  - **v2 complete (M1–M10).**
