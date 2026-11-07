@@ -14,6 +14,14 @@ namespace GoldenHour
         Kneeling
     }
 
+    /// <summary>Stretcher carry: the head-end carrier holds the handles behind, the foot-end carrier in front.</summary>
+    public enum CarryGrip
+    {
+        None,
+        Front,
+        Behind
+    }
+
     public enum BodyStyle
     {
         Civilian,
@@ -53,6 +61,7 @@ namespace GoldenHour
         public float BreathsPerMinute { get; set; } = 14f;
         public bool Restless { get; set; }
         public bool Limp { get; set; }
+        public CarryGrip Grip { get; set; }
         public float Height { get; private set; } = 1.75f;
         public Transform Pivot => pivot;
         public bool UsesRig { get; private set; }
@@ -388,6 +397,19 @@ namespace GoldenHour
                     Rotate("UpperArm.L", 0f, 0f, -6f);
                     Rotate("UpperArm.R", 0f, 0f, 6f);
                     break;
+            }
+
+            if (Grip != CarryGrip.None && (State == BodyState.Walking || State == BodyState.Standing))
+            {
+                // Arms locked on the stretcher handles (overrides the walking arm swing).
+                bool front = Grip == CarryGrip.Front;
+                float upper = front ? -40f : 24f;
+                float lower = front ? -38f : -14f;
+                Rotate("UpperArm.L", upper, 0f, front ? -4f : -10f);
+                Rotate("UpperArm.R", upper, 0f, front ? 4f : 10f);
+                Rotate("LowerArm.L", lower, 0f, 0f);
+                Rotate("LowerArm.R", lower, 0f, 0f);
+                Rotate("Spine", front ? 5f : -3f, 0f, 0f);
             }
 
             if (Restless && !Limp)

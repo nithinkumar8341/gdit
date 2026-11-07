@@ -12,7 +12,8 @@ namespace GoldenHour.EditorTools
     {
         public static readonly string[] Models =
         {
-            "RiggedHuman", "RiggedChild", "Ambulance", "PoliceCar", "FireTruck", "Bus", "Motorbike", "Stretcher", "V2Props"
+            "RiggedHuman", "RiggedChild", "Ambulance", "PoliceCar", "FireTruck", "Bus", "Motorbike", "Stretcher", "V2Props",
+            "TreatmentProps", "FirstPersonHands"
         };
 
         /// <summary>Diagnostics: logs the imported hierarchy of a v2 model (batch: -executeMethod ...Dump).</summary>

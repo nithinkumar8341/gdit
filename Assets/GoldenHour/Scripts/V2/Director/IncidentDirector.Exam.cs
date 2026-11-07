@@ -365,6 +365,7 @@ namespace GoldenHour
             if (treatment == Treatment.Blanket) Blankets = Mathf.Max(0, Blankets - 1);
             TreatmentResult result = casualty.Sim.Treat(treatment);
             bool indicated = (casualty.Profile.indicatedTreatments & treatment) != 0;
+            ShowTreatment(casualty, treatment);
             if (result == TreatmentResult.Effective && indicated)
             {
                 Score("aid", ScoreRules.TreatmentEffective, TreatmentLabel(treatment).Split('(')[0].Trim() + " for " + casualty.Id, casualty.Id);

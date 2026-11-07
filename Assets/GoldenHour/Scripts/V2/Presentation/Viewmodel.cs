@@ -13,6 +13,19 @@ namespace GoldenHour
         public static readonly Color GloveColor = new Color32(70, 120, 215, 255);
 
         public static Viewmodel Instance { get; private set; }
+
+        /// <summary>Blender FirstPersonHands.fbx (sleeves, nitrile gloves with jointed fingers), wired by Build Project; primitives are used without it.</summary>
+        public GameObject handsModel;
+
+        private GameObject HandsModel => handsModel;
+
+        /// <summary>True when the hands come from the Blender model (tests).</summary>
+        public bool UsesModel { get; private set; }
+
+        /// <summary>Finger and thumb segments of the model hands (tests: glove detail).</summary>
+        public int FingerSegments { get; private set; }
+
+        private readonly System.Collections.Generic.List<Renderer> cuffs = new System.Collections.Generic.List<Renderer>();
         public bool GlovesVisible { get; private set; }
         public float Stress { get; set; }
         public bool Reaching { get; set; }
@@ -46,8 +59,19 @@ namespace GoldenHour
             root.SetParent(transform, false);
             handMaterial = MaterialFactory.Create(SkinColor, 0f, 0.55f);
             Material sleeve = MaterialFactory.Create(new Color32(40, 60, 80, 255), 0f, 0.8f);
-            left = Arm("Left", -1f, sleeve);
-            right = Arm("Right", 1f, sleeve);
+            left = HandsModel != null ? ModelArm("Left", -1f, "Hand.L") : null;
+            right = HandsModel != null ? ModelArm("Right", 1f, "Hand.R") : null;
+            UsesModel = left != null && right != null;
+            if (!UsesModel)
+            {
+                if (left != null) Destroy(left.gameObject);
+                if (right != null) Destroy(right.gameObject);
+                left = Arm("Left", -1f, sleeve);
+                right = Arm("Right", 1f, sleeve);
+            }
+
+            foreach (Renderer cuff in cuffs) cuff.enabled = false;
+
             left.localPosition = leftRest;
             right.localPosition = rightRest;
             foreach (Renderer part in root.GetComponentsInChildren<Renderer>())
@@ -55,6 +79,35 @@ namespace GoldenHour
                 part.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 part.receiveShadows = false;
             }
+        }
+
+        /// <summary>One arm from the Blender model: glove parts share the switchable skin/nitrile material.</summary>
+        private Transform ModelArm(string side, float sign, string partName)
+        {
+            Transform source = TreatmentVisuals.FindDeep(HandsModel.transform, partName);
+            if (source == null) return null;
+            Transform arm = new GameObject(side + " Arm").transform;
+            arm.SetParent(root, false);
+            arm.localRotation = Quaternion.Euler(-12f, -sign * 14f, sign * 8f);
+            GameObject hand = Instantiate(source.gameObject, arm, false);
+            hand.name = "Hand Model";
+            hand.transform.localPosition = Vector3.zero;
+            hand.transform.localRotation = Quaternion.Inverse(HandsModel.transform.rotation) * source.rotation;
+            foreach (Renderer part in hand.GetComponentsInChildren<Renderer>())
+            {
+                if (!part.name.StartsWith("Glove_")) continue;
+                if (part.name.StartsWith("Glove_Cuff")) cuffs.Add(part);
+                if (part.name.StartsWith("Glove_Finger") || part.name.StartsWith("Glove_Thumb"))
+                {
+                    if (!part.name.Contains("_Tip")) FingerSegments++;
+                }
+
+                part.sharedMaterial = handMaterial;
+            }
+
+            foreach (Collider collider in hand.GetComponentsInChildren<Collider>()) Destroy(collider);
+            foreach (Transform child in hand.GetComponentsInChildren<Transform>()) child.gameObject.layer = gameObject.layer;
+            return arm;
         }
 
         private Transform Arm(string side, float sign, Material sleeve)
@@ -140,6 +193,11 @@ namespace GoldenHour
             handMaterial.color = color;
             if (handMaterial.HasProperty("_BaseColor")) handMaterial.SetColor("_BaseColor", color);
             if (handMaterial.HasProperty("_Smoothness")) handMaterial.SetFloat("_Smoothness", on ? 0.75f : 0.45f);
+            // The glove cuff only exists when gloves are worn (bare hands end at the sleeve).
+            foreach (Renderer cuff in cuffs)
+            {
+                if (cuff != null) cuff.enabled = on;
+            }
         }
 
         public void SetVisible(bool visible)

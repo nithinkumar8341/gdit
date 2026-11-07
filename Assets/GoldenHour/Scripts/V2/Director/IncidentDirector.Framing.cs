@@ -151,6 +151,25 @@ namespace GoldenHour
             }
         }
 
+        /// <summary>Visible aid on the body: the dressing goes where the bleeding marker was, the blanket over or round the casualty.</summary>
+        private void ShowTreatment(Casualty casualty, Treatment treatment)
+        {
+            if ((casualty.Sim.Applied & treatment) == 0 || casualty.Body == null) return;
+            if (treatment == Treatment.PressureDressing)
+            {
+                string part = BleedingPart(casualty);
+                if (part.EndsWith(".R") || part.EndsWith(".L")) part = NearerSide(casualty, part);
+                TreatmentVisuals.For(casualty).ShowDressing(part);
+            }
+            else if (treatment == Treatment.Blanket)
+            {
+                TreatmentVisuals.For(casualty).ShowBlanket();
+            }
+        }
+
+        /// <summary>Joint the dressing for this casualty's bleeding site attaches to (tests).</summary>
+        public string DressingPart(Casualty casualty) => BleedingPart(casualty);
+
         private void ShowMarker(Casualty casualty, string part, string label)
         {
             if (InstantActions || casualty == null) return;

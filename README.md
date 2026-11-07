@@ -7,7 +7,32 @@ A first-person **educational** serious game about the first minutes of a mass-ca
 - give simple first aid;
 - hand people to ambulances in the right order while the golden-hour clock runs.
 
-It is a Windows game, built with Unity 6.6 (URP, Input System, AI Navigation).
+It is a Windows game, built with **Unity 6000.6.2f1** (URP, Input System, AI Navigation).
+
+![Examination beside the casualty](Docs/Screenshots/examination.png)
+
+| | |
+|---|---|
+| ![Supply bag](Docs/Screenshots/supply_bag.png) | ![Visible treatment](Docs/Screenshots/treated.png) |
+| ![Stretcher carry](Docs/Screenshots/stretcher_carry.png) | ![Body-part marker](Docs/Screenshots/body_marker.png) |
+
+## Features
+
+- **Four data-driven scenarios** (ScriptableObjects): Training Yard (guided tutorial), Highway Collision, Night Bus Rollover and Collapsed Community Hall.
+- **START triage** with physical RED/YELLOW/GREEN/BLACK tags. First-tag scoring; a retriage needs a fresh examination.
+- **In-world examination.** You kneel beside the casualty, who stays visible next to a compact side panel. Timed checks show a world-space marker on the body part (chest, head, forearm, wound).
+- **Supply bag** with limited dressings, blankets and gloves, plus items that are not used in triage and explain why.
+- **Live patient tasks** ("Control bleeding on T02"), each revealed only by a finding.
+- **Visible aid:** dressings and foil blankets (Blender models) appear on the body.
+- **Seeded physiology** with deterioration and preventable deaths; adaptive difficulty.
+- **112 dispatch report**, walking-wounded shout, hazards, bystanders, stress system and gloved first-person hands.
+- **Ambulance waves.** Two NavMesh paramedics carry casualties on a stretcher in carry poses, and handovers are scored by priority.
+- **Tabbed debrief:** timeline, your tag against START, heatmap, telemetry JSON, stars and unlocks.
+- **Accessibility:** rebinding, gamepad, subtitles, colour-blind tags, text size, reduce motion.
+
+## Tech stack
+
+Unity 6000.6.2f1 · URP 17 · Input System 1.20 · AI Navigation (runtime NavMesh) · TextMesh Pro · Unity Test Framework · Blender 5.2 (background-mode Python generators for all models) · Python for procedural audio.
 
 > **Disclaimer:** Golden Hour is an educational simulation only. It is **not** medical training or medical advice. The content has **NOT been medically reviewed** and should be checked by a qualified first-aid trainer. In a real emergency, call your local emergency number and follow professional guidance.
 
@@ -108,7 +133,7 @@ Casualties deteriorate on a seeded physiology model, and untreated life threats 
 | `Assets/GoldenHour/Scripts/V2/` | Runtime: `Director/` (IncidentDirector partials, FirstAidMinigame), `Characters/`, `World/` (environments, hazards, ambulances, paramedics, bystanders), `UI/`, `Input/`, `Presentation/` (cutscenes, viewmodel hands, stress, photo mode), `Debrief/`, `Data/` |
 | `Assets/GoldenHour/Scripts/` (other folders) | Shared code: player controller, audio, menu, UI factory, environment, settings |
 | `Assets/GoldenHour/ScriptableObjects/V2/` | `Casualties/*.asset` (CasualtyProfile), `Scenarios/*.asset` (ScenarioData), `Campaign.asset` |
-| `Assets/GoldenHour/Blender/` | `generate_assets.py` (v1 props), `generate_v2_assets.py` (rigs, vehicles, stretcher, props), `generate_audio.py`, sources and FBX exports |
+| `Assets/GoldenHour/Blender/` | `generate_assets.py` (v1 props), `generate_v2_assets.py` (rigs, vehicles, stretcher, props), `generate_v3_assets.py` (treatment props, gloved hands), `generate_audio.py`, sources and FBX exports |
 | `Assets/GoldenHour/Editor/` | `GoldenHourProjectBuilder` (menu **GoldenHour**), `GoldenHourContent` (scenario data), `V2ModelPostprocessor` |
 | `Assets/GoldenHour/Tests/Editor/` | Edit-mode NUnit tests |
 | `Assets/Scenes/Samplespace.unity`, `Assets/GoldenHour/Scenes/MainMenu.unity` | Gameplay and menu scenes |
@@ -126,6 +151,7 @@ $blender = 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe'
 # Optional: regenerate models and audio
 & $blender --background --factory-startup --python "$proj\Assets\GoldenHour\Blender\generate_assets.py"
 & $blender --background --factory-startup --python "$proj\Assets\GoldenHour\Blender\generate_v2_assets.py"
+& $blender --background --factory-startup --python "$proj\Assets\GoldenHour\Blender\generate_v3_assets.py"
 python "$proj\Assets\GoldenHour\Blender\generate_audio.py"
 
 # Content, scenes, references, build settings + validation
@@ -145,3 +171,28 @@ Builds\GoldenHour\GoldenHour.exe -screen-fullscreen 0 -screen-width 1600 -screen
 # Frame-rate benchmark (preset Low|Medium|High)
 Builds\GoldenHour\GoldenHour.exe -screen-fullscreen 1 -screen-width 1920 -screen-height 1080 -goldenhour-benchmark out\bench -goldenhour-preset Medium
 ```
+
+## Architecture
+
+- **`GoldenHour.Core`** (pure C#, no scene dependencies) holds the rules: START evaluation, physiology and deterioration, triage records, scoring, patient tasks and telemetry. Edit-mode NUnit tests cover them.
+- **`IncidentDirector`** (partial classes: core loop, Exam, Framing, Supplies, Panels, FirstAid) runs a scenario. It spawns casualties, hazards and ambulances, advances the clock and drives the HUD and panels.
+- **World and characters:** `Casualty` + `HumanoidBody` (procedurally animated Blender rigs), `TreatmentVisuals`, `Ambulance`/`Paramedic`/`Walker` (NavMesh), `Hazard`, environments.
+- **Editor automation:** `GoldenHourProjectBuilder` (menu **GoldenHour**) generates missing content, wires scenes and references, validates the project including Blender imports, and builds the player. Content generation never overwrites Inspector edits; **GoldenHour/Regenerate Content** resets it on purpose.
+
+## Tests
+
+- **Edit-mode unit tests:** 29, covering START rules, physiology, scoring, retriage, patient tasks and treatment names.
+- **Validate Project:** content rules, scenes, references, audio, and Blender import checks (rig joints, vehicle orientation, treatment props, hands).
+- **End-to-end autotest of the built player** (`-goldenhour-autotest`): plays all four scenarios with real frames. It uses an independent score tally that must equal the game's ledger exactly. It writes `autotest_results.txt` and screenshots. See [TESTING_REPORT.md](TESTING_REPORT.md).
+
+## Known limitations
+
+- The medical content has **not** been reviewed by a qualified trainer. Timings are illustrative; children use adult START; CPR is reduced to a rhythm exercise.
+- Characters are rigid-segment rigs animated in code (no skinned meshes), so joints can show small gaps in extreme poses.
+- The autotest drives minigame inputs and some panel choices through test hooks. Feel, audio mix and readability need human playtests (see PLAYTEST_PLAN.md).
+- Windows only; tested on one laptop (Intel Iris Xe and RTX 2050).
+- The docked examination panel is laid out for 16:9. Very narrow aspect ratios or text size above 100% can crowd it.
+
+## License
+
+Code and original assets: [MIT](LICENSE). Third-party packages keep their own licences (see [ASSET_CREDITS.md](ASSET_CREDITS.md)).

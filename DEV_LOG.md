@@ -182,3 +182,43 @@
       - tutorial: the bag opens with counts; a splint gives START feedback with no score change or consumption; a dressing from the bag is applied and one is used up.
   - **Results:** 0 `warning CS` or `error CS` lines; Validate Project passed; autotest 309/309, exit code 0. Screenshot: `tutorial_07a_supply_bag`.
   - **Process note:** two compile errors were fixed in the loop (a Python-patched `\n` literal, and `Exists` on an `IReadOnlyList`).
+- **Phase 5 (intent):**
+  - **Treatment models:** new Blender script `generate_v3_assets.py` (background mode, new files only) exports `TreatmentProps.fbx` (limb, head and torso dressings; foil blanket for lying and sitting) and `FirstPersonHands.fbx` (sleeves and nitrile gloves with jointed fingers).
+  - **In game:** dressings and blankets appear on the casualty's body when applied. The first-person hands use the new model. Both paramedics take carry poses on the stretcher (head end and foot end).
+  - **Verification:** import validation in Validate Project, autotest checks and screenshots.
+- **Phase 5 (done):**
+  - **Blender:** `generate_v3_assets.py` ran in background mode (exit code 0, "GOLDEN_HOUR_V3_ASSETS_OK"). It exported new files only:
+    - `TreatmentProps.fbx` (17 objects, 11 meshes);
+    - `FirstPersonHands.fbx` (53 objects, 50 meshes);
+    - `Source/GoldenHour_V3.blend`.
+    - Before exporting, a search confirmed no existing asset or code used these names.
+  - **Import validation:** `ValidateTreatmentModels` in Validate Project logged:
+    - limb dressing band 0.156 × 0.132 × 0.154;
+    - head band 0.248 wide;
+    - lying blanket 0.76 × 1.51 on the front (+Z);
+    - shawl on the back (−Z);
+    - each hand has 10 finger and thumb segments, fingertips forward (z 0.154), thumbs on the inner side (±0.065).
+  - **Runtime:**
+    - `TreatmentVisuals` parents the dressing to the bleeding joint (the same side as the marker) and the blanket to the hips when lying or the chest (as a shawl) when sitting or standing.
+    - `Viewmodel` builds the hands from the model, with the glove material switching from skin to nitrile and the cuff shown only when gloved.
+    - `HumanoidBody.Grip`: the head-end carrier holds the handles behind, the foot-end carrier in front. The partner follows at 2.55 m.
+  - **Checks:** autotest 309 → 317.
+    - Dressing visible at the bleeding site ×4.
+    - Blanket visible ×2: only bus and building apply a blanket to a casualty in the autotest route.
+    - Model hands with 20 segments in nitrile.
+    - Carry poses and spacing during a real NavMesh carry.
+  - **Results:** 0 `warning CS` or `error CS` lines; Validate Project passed; autotest 317/317, exit code 0. Screenshots `tutorial_07c_treated` (dressing on the lower leg, gloved model hands) and `tutorial_09b_stretcher_carry`.
+- **Phases 6, 7 and 8: skipped.** The user asked to finalise within 20 minutes (2026-11-07). Each would need its own full verification cycle (about 25 minutes per cycle) plus a re-benchmark for Phase 6, so none could be completed and verified in time. Nothing was started for them, so nothing needs reverting. Exact next steps:
+  - **Phase 6:** tiling textures and decals in `ScenarioEnvironment`, then `-goldenhour-benchmark` at Medium on Iris Xe.
+  - **Phase 7:** a skinned-character attempt in Blender, kept only if the import validates.
+  - **Phase 8:** split `IncidentDirector.cs` (about 1,050 lines plus its partials) into components, and move the test hooks out of game classes.
+- **Phase 9 (final QA):**
+  - The build verified by the Phase 5 cycle (`Builds/GoldenHour`, 317/317) was zipped to `Release/GoldenHour_Windows.zip` (39.3 MB, 203 entries, 0 `BackUpThisFolder` entries, plus README, ASSET_CREDITS and LICENSE). The zip is not in git.
+  - TESTING_REPORT counts updated (unit tests 29, autotest 317); evidence copied to `Docs/TestEvidence`.
+  - **Not done in the time limit:** a re-run of the autotest from the extracted zip, and a new benchmark (Phases 1–5 added no environment geometry, so the M8 benchmark still applies).
+- **Phase 10 (GitHub preparation, not pushed):**
+  - README rewritten: 5 screenshots in `Docs/Screenshots`, features, tech stack, architecture, tests, known limitations, licence.
+  - MIT `LICENSE` (nithinkumar8341).
+  - ASSET_CREDITS: v3 models added.
+  - `GITHUB_STEPS.md`: exact commands, release attachment, description, topics.
+  - `.gitignore` already covers Library, Temp, Obj, Logs, UserSettings, Builds, Release and IDE files.

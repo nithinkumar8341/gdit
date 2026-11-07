@@ -49,6 +49,7 @@ namespace GoldenHour
         public GameObject childRigPrefab;
         public GameObject ambulancePrefab;
         public GameObject stretcherPrefab;
+        public GameObject treatmentPropsPrefab;
         public EnvironmentAssets environmentAssets = new EnvironmentAssets();
 
         private readonly List<Casualty> casualties = new List<Casualty>();
@@ -125,6 +126,7 @@ namespace GoldenHour
             GameInput.Ensure();
             MaterialFactory.Template = baseMaterial;
             MaterialFactory.UnlitTemplate = unlitMaterial;
+            TreatmentVisuals.Model = treatmentPropsPrefab;
             InteractionOutline.OutlineMaterial = outlineMaterial;
             Scenario = catalog != null ? catalog.Find(Session.ScenarioId) : null;
             if (Scenario == null) Scenario = fallbackScenario;
@@ -401,6 +403,7 @@ namespace GoldenHour
             if (spawnedWaves.Contains(index)) return ambulances.Find(a => a.Number == index + 1);
             spawnedWaves.Add(index);
             Ambulance.StretcherModel = stretcherPrefab;
+            TreatmentVisuals.Model = treatmentPropsPrefab;
             Ambulance ambulance = new GameObject("Ambulance").AddComponent<Ambulance>();
             Vector3 road = Scenario.ambulanceBay - Scenario.ambulanceSpawn;
             road.y = 0f;

@@ -161,6 +161,7 @@ namespace GoldenHour
             queue.Sort((a, b) => Urgency(a).CompareTo(Urgency(b)));
             bool screenshotTaken = false;
             Casualty taskCase = null;
+            bool blanketChecked = false;
             foreach (Casualty casualty in queue)
             {
                 yield return ExamineAndTag(d, casualty, casualty == wrongTagCase);
@@ -187,6 +188,28 @@ namespace GoldenHour
                     Check(id + ": the task is ticked once the dressing is applied to " + casualty.Id,
                         d.PatientTaskList.Exists(t => t.casualtyId == casualty.Id && t.kind == PatientTaskKind.ControlBleeding && t.done) &&
                         !d.ObjectivesText.Contains("[  ] Control bleeding on " + casualty.Id), Flat(d.ObjectivesText));
+                    TreatmentVisuals visuals = casualty.GetComponent<TreatmentVisuals>();
+                    Transform joint = visuals != null && casualty.Body != null ? casualty.Body.Joint(visuals.DressingJoint ?? string.Empty) : null;
+                    string site = d.DressingPart(casualty);
+                    Check(id + ": the dressing is visible on " + casualty.Id + "'s body at the bleeding site (Blender model)",
+                        visuals != null && visuals.DressingShown && joint != null &&
+                        visuals.DressingJoint.StartsWith(site.TrimEnd('L', 'R', '.')) &&
+                        Vector3.Distance(visuals.DressingTransform.position, joint.position) < 0.4f &&
+                        visuals.DressingTransform.GetComponentsInChildren<Renderer>().Length >= 2,
+                        (visuals != null ? visuals.DressingJoint : "none") + " for site " + site);
+                    if (id == "tutorial")
+                    {
+                        yield return new WaitForSecondsRealtime(0.3f);
+                        yield return Screenshot("tutorial_07c_treated");
+                    }
+                }
+
+                if (!blanketChecked && (casualty.Sim.Applied & Treatment.Blanket) != 0)
+                {
+                    blanketChecked = true;
+                    TreatmentVisuals visuals = casualty.GetComponent<TreatmentVisuals>();
+                    Check(id + ": the foil blanket is visible on " + casualty.Id + " (Blender model, lying or shawl to suit the pose)",
+                        visuals != null && visuals.BlanketShown, casualty.Body != null ? casualty.Body.State.ToString() : "no body");
                 }
 
                 d.ClosePanel();
@@ -414,6 +437,11 @@ namespace GoldenHour
                 toastRects.Count + " visible: " + string.Join(" ", toastRects.ConvertAll(r => r.ToString("0"))) + " | panel " + panel.ToString("0"));
             yield return Screenshot(id + "_06_examination");
             if (id != "tutorial") yield break;
+
+            Viewmodel hands = Viewmodel.Instance;
+            Check("tutorial: first-person hands use the Blender glove model (4 fingers and a thumb per hand, two segments each) in blue nitrile",
+                hands != null && hands.UsesModel && hands.FingerSegments == 20 && hands.GlovesVisible,
+                hands != null ? hands.FingerSegments + " segments" : "no viewmodel");
 
             // A timed check shows a world-space marker on the body part involved (here: the forearm for circulation).
             d.InstantActions = false;
@@ -686,11 +714,37 @@ namespace GoldenHour
                     }
 
                     bool usedNavMesh = false;
+                    bool carrySampled = false;
+                    bool carryPoses = true;
+                    string carryDetail = "never sampled";
                     Time.timeScale = 4f;
                     float end = Time.realtimeSinceStartup + 45f;
                     while (first != null && !first.Sim.Transported && Time.realtimeSinceStartup < end)
                     {
                         usedNavMesh |= ambulance.Lead.Walker.UsingNavMesh;
+                        if (first.OnStretcher && ambulance.Lead.Walker.Moving && ambulance.Partner != null)
+                        {
+                            Vector3 gap = ambulance.Lead.transform.position - ambulance.Partner.transform.position;
+                            gap.y = 0f;
+                            bool poses = ambulance.Lead.Body.Grip == CarryGrip.Behind && ambulance.Partner.Body.Grip == CarryGrip.Front &&
+                                         first.transform.IsChildOf(ambulance.StretcherFrame);
+                            if (Time.frameCount % 5 == 0) carryPoses &= poses;
+                            carryDetail = "grips " + ambulance.Lead.Body.Grip + "/" + ambulance.Partner.Body.Grip + ", gap " + gap.magnitude.ToString("0.00") + " m";
+                            if (!carrySampled && gap.magnitude > Ambulance.PartnerDistance - 0.6f && gap.magnitude < Ambulance.PartnerDistance + 0.6f)
+                            {
+                                carrySampled = true;
+                                Time.timeScale = 1f;
+                                Vector3 side = ambulance.Lead.transform.right * 4.2f - ambulance.Lead.transform.forward * 1.2f;
+                                Vector3 stand = ambulance.Lead.transform.position + side;
+                                d.player.ForcedKneel = false;
+                                d.player.Teleport(new Vector3(stand.x, d.player.transform.position.y, stand.z), 0f, 0f);
+                                d.player.LookAt(ambulance.Lead.transform.position - ambulance.Lead.transform.forward * 1.2f + Vector3.up * 0.8f);
+                                yield return null;
+                                yield return Screenshot("tutorial_09b_stretcher_carry");
+                                Time.timeScale = 4f;
+                            }
+                        }
+
                         if (first.OnStretcher && !usedNavMesh) usedNavMesh = ambulance.Lead.Walker.UsingNavMesh;
                         yield return null;
                     }
@@ -698,6 +752,8 @@ namespace GoldenHour
                     Time.timeScale = 1f;
                     Check("tutorial: paramedics walk on the NavMesh and carry the casualty on a stretcher to the ambulance",
                         first != null && first.Sim.Transported && usedNavMesh);
+                    Check("tutorial: two paramedics carry the stretcher in carry poses (head end hands behind, foot end hands in front)",
+                        carrySampled && carryPoses, carryDetail);
                 }
 
                 ambulance.CompleteLoadingNow();

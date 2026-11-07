@@ -41,6 +41,11 @@ namespace GoldenHour
         public bool Busy => fetching || queue.Count > 0;
         public IReadOnlyList<Casualty> Loaded => loaded;
         public Paramedic Lead => lead;
+        public Paramedic Partner => partner;
+        public Transform StretcherFrame => stretcher;
+
+        /// <summary>Distance behind the lead at which the second paramedic holds the foot end of the stretcher.</summary>
+        public const float PartnerDistance = 2.55f;
         public FlashingLight[] Sirens { get; private set; } = new FlashingLight[0];
 
         public void Initialize(int number, int capacity, Vector3 spawnPoint, Vector3 bayPoint, Vector3 sceneCentre,
@@ -64,6 +69,8 @@ namespace GoldenHour
             lead = SpawnParamedic("Paramedic A", true, rigPrefab, number * 10 + 1);
             partner = SpawnParamedic("Paramedic B", false, rigPrefab, number * 10 + 2);
             stretcher = BuildStretcher();
+            lead.Body.Grip = CarryGrip.Behind;
+            partner.Body.Grip = CarryGrip.Front;
         }
 
         private void BuildVehicle(GameObject prefab)
@@ -205,7 +212,7 @@ namespace GoldenHour
 
             if (partner != null && partner.gameObject.activeSelf && lead.Walker.Moving)
             {
-                Vector3 behind = lead.transform.position - lead.transform.forward * 2.3f;
+                Vector3 behind = lead.transform.position - lead.transform.forward * PartnerDistance;
                 partner.transform.position = Vector3.Lerp(partner.transform.position, behind, Time.deltaTime * 8f);
                 partner.transform.rotation = lead.transform.rotation;
                 if (partner.Body.State != BodyState.Walking) partner.Body.SetState(BodyState.Walking);

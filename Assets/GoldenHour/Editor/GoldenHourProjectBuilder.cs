@@ -153,12 +153,17 @@ namespace GoldenHour.EditorTools
                 Require(AssetDatabase.LoadAssetAtPath<GameObject>(ModelPath + model + ".fbx") != null, "Blender export " + model + ".fbx is missing.");
             }
 
+            ValidateTreatmentModels();
+
             foreach (string clip in AudioClips) LoadClip(clip + ".wav");
 
             Scene game = EditorSceneManager.OpenScene(GameScenePath, OpenSceneMode.Single);
             Require(GameObject.Find("Player") != null && GameObject.Find("EventSystem") != null, "Player and EventSystem are required.");
             IncidentDirector director = UnityEngine.Object.FindAnyObjectByType<IncidentDirector>();
             Require(director != null, "IncidentDirector is missing from the gameplay scene.");
+            Require(director.treatmentPropsPrefab != null, "IncidentDirector needs the TreatmentProps model.");
+            Viewmodel sceneViewmodel = UnityEngine.Object.FindAnyObjectByType<Viewmodel>();
+            Require(sceneViewmodel != null && sceneViewmodel.handsModel != null, "The player camera's Viewmodel needs the FirstPersonHands model.");
             Require(director.catalog == catalog && director.baseMaterial != null && director.unlitMaterial != null && director.kitPrefab != null &&
                     director.outlineMaterial != null && director.environmentAssets.smokeMaterial != null && director.environmentAssets.carPrefab != null,
                 "IncidentDirector references are not fully assigned.");
@@ -472,7 +477,10 @@ namespace GoldenHour.EditorTools
             cameraData.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
             EditorUtility.SetDirty(cameraData);
             if (camera.GetComponent<AudioListener>() == null) camera.gameObject.AddComponent<AudioListener>();
-            if (camera.GetComponent<Viewmodel>() == null) camera.gameObject.AddComponent<Viewmodel>();
+            Viewmodel viewmodel = camera.GetComponent<Viewmodel>();
+            if (viewmodel == null) viewmodel = camera.gameObject.AddComponent<Viewmodel>();
+            viewmodel.handsModel = OptionalModel("FirstPersonHands");
+            EditorUtility.SetDirty(viewmodel);
 
             CharacterController characterController = playerObject.GetComponent<CharacterController>();
             if (characterController == null) characterController = playerObject.AddComponent<CharacterController>();
@@ -502,6 +510,7 @@ namespace GoldenHour.EditorTools
             director.humanRigPrefab = OptionalModel("RiggedHuman");
             director.childRigPrefab = OptionalModel("RiggedChild");
             director.stretcherPrefab = OptionalModel("Stretcher");
+            director.treatmentPropsPrefab = OptionalModel("TreatmentProps");
             director.ambulancePrefab = OptionalModel("Ambulance");
             director.environmentAssets.carPrefab = LoadModel("DamagedCar");
             director.environmentAssets.barrierPrefab = LoadModel("RoadBarrier");
@@ -639,6 +648,73 @@ namespace GoldenHour.EditorTools
         {
             if (AssetDatabase.IsValidFolder("Assets/TutorialInfo")) AssetDatabase.DeleteAsset("Assets/TutorialInfo");
             if (File.Exists("Assets/Readme.asset")) AssetDatabase.DeleteAsset("Assets/Readme.asset");
+        }
+
+        /// <summary>Bounds of a model part (all its meshes) in the model root's space, which is how it is attached at runtime.</summary>
+        private static Bounds PartBounds(GameObject model, string partName)
+        {
+            Transform part = TreatmentVisuals.FindDeep(model.transform, partName);
+            Require(part != null, model.name + " has no part " + partName + ".");
+            Matrix4x4 toRoot = model.transform.worldToLocalMatrix;
+            bool any = false;
+            Bounds bounds = new Bounds();
+            foreach (MeshFilter filter in part.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (filter.sharedMesh == null) continue;
+                Bounds local = filter.sharedMesh.bounds;
+                Matrix4x4 matrix = toRoot * filter.transform.localToWorldMatrix;
+                for (int i = 0; i < 8; i++)
+                {
+                    Vector3 corner = local.center + Vector3.Scale(local.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                    Vector3 point = matrix.MultiplyPoint3x4(corner);
+                    if (!any) bounds = new Bounds(point, Vector3.zero);
+                    else bounds.Encapsulate(point);
+                    any = true;
+                }
+            }
+
+            Require(any, model.name + "/" + partName + " has no meshes.");
+            return bounds;
+        }
+
+        /// <summary>Phase 5 Blender exports: treatment props and first-person gloved hands (shape, orientation, detail).</summary>
+        private static void ValidateTreatmentModels()
+        {
+            GameObject props = AssetDatabase.LoadAssetAtPath<GameObject>(ModelPath + "TreatmentProps.fbx");
+            Require(props != null, "Blender export TreatmentProps.fbx is missing.");
+            Bounds limb = PartBounds(props, "Dressing_Limb");
+            Require(limb.center.magnitude < 0.05f && limb.extents.x > 0.05f && limb.extents.x < 0.1f && limb.extents.z > 0.05f && limb.extents.y < 0.1f,
+                "Dressing_Limb must be a band of radius ~0.07 m round the joint's Y axis: " + limb);
+            Require(PartBounds(props, "Dressing_Limb_Pad").center.z > 0.04f, "The limb dressing pad must face the front (+Z).");
+            Bounds head = PartBounds(props, "Dressing_Head");
+            Require(head.extents.x > 0.1f && head.extents.x < 0.16f && head.center.y > 0.1f && head.center.y < 0.2f, "Dressing_Head must ring the head: " + head);
+            Require(PartBounds(props, "Dressing_Torso").center.z > 0.08f, "Dressing_Torso must sit on the front of the trunk.");
+            Bounds lying = PartBounds(props, "Blanket_Lying");
+            Require(lying.size.y > 1.3f && lying.size.x > 0.55f && lying.size.x < 0.95f && lying.center.z > 0f,
+                "Blanket_Lying must run along the body (+Y) on its front (+Z): " + lying);
+            Bounds shawl = PartBounds(props, "Blanket_Shawl");
+            Require(shawl.center.z < 0f && shawl.size.y > 0.5f, "Blanket_Shawl must wrap the back and shoulders: " + shawl);
+
+            GameObject hands = AssetDatabase.LoadAssetAtPath<GameObject>(ModelPath + "FirstPersonHands.fbx");
+            Require(hands != null, "Blender export FirstPersonHands.fbx is missing.");
+            foreach (string side in new[] { "L", "R" })
+            {
+                Transform hand = TreatmentVisuals.FindDeep(hands.transform, "Hand." + side);
+                Require(hand != null, "FirstPersonHands has no Hand." + side + ".");
+                int segments = hand.GetComponentsInChildren<MeshFilter>(true)
+                    .Count(f => (f.name.StartsWith("Glove_Finger") || f.name.StartsWith("Glove_Thumb")) && !f.name.Contains("_Tip"));
+                Require(segments == 10, "Hand." + side + " needs 4 two-segment fingers and a two-segment thumb (found " + segments + ").");
+                Bounds fingers = PartBounds(hands, "Glove_Finger3_B_" + side);
+                Bounds thumb = PartBounds(hands, "Glove_Thumb_B_" + side);
+                Bounds sleeve = PartBounds(hands, "Sleeve_" + side);
+                Require(fingers.center.z > 0.12f && sleeve.center.z < -0.1f, "Hand." + side + " must point forward (+Z) from the sleeve.");
+                Require(side == "L" ? thumb.center.x > 0.02f : thumb.center.x < -0.02f, "Hand." + side + " thumb must be on the inner side.");
+                Debug.Log("Phase 5 model check: Hand." + side + " finger segments " + segments + ", fingertip z " + fingers.max.z.ToString("0.000") +
+                          ", thumb x " + thumb.center.x.ToString("0.000"));
+            }
+
+            Debug.Log("Phase 5 model check: limb dressing " + limb.size.ToString("0.000") + ", head dressing " + head.size.ToString("0.000") +
+                      ", lying blanket " + lying.size.ToString("0.000") + " centre " + lying.center.ToString("0.000") + ", shawl " + shawl.size.ToString("0.000"));
         }
 
         private static void ValidateRig(string rigName)

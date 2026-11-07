@@ -34,7 +34,7 @@ The log shows `Golden Hour project validation passed.` Validation throws on the 
 
 ## 3. Edit-mode unit tests (Test Framework 1.8)
 
-**26/26 passed** (`editmode_tests.xml`; 24 test methods, some parameterised). The tests cover:
+**29/29 passed** (`editmode_tests.xml`; 24 test methods, some parameterised). The tests cover:
 - **START steps:** walking → GREEN even with red-flag signs; no breathing after airway opening → BLACK; breathing only after airway opening → RED; the rate threshold at 30; the circulation threshold (refill over 2 s or no radial pulse); commands; deceased → BLACK; priority order.
 - **Physiology:** haemorrhage deteriorates and dies untreated; a pressure dressing stabilises; YELLOW worsens to RED unless stabilised; airway opening delays death and the recovery position stabilises; CPR never changes the outcome, and an expectant death is not counted as preventable; seeded determinism, with the measured rate respecting the threshold; transport stops deterioration.
 - **Triage records and scoring:** first-tag scoring; a tag needs an examination and a retag needs a re-examination; a retag without a change in condition earns nothing; handover priority; dispatch fields; time bonus, stars and ledger; adaptive difficulty bands; the profile unlocking the next scenario.
@@ -43,7 +43,17 @@ The log shows `Golden Hour project validation passed.` Validation throws on the 
 
 The player is launched with `-goldenhour-autotest <dir>`. It uses a fixed seed (4242), Normal difficulty, an isolated profile folder, and plays real frames, including the NavMesh, ambulances and minigames. It keeps an **independent score tally** computed from the published rules and compares it with the game's ledger.
 
-**Result: ALL 257 CHECKS PASSED. 0 errors or exceptions logged during the whole run. Exit code 0.**
+**Result: ALL 317 CHECKS PASSED. Exit code 0.** The count is from the final improvement plan (Phases 1–5); it was 257 at v2 M10. The per-area table below is the v2 M10 baseline. The added checks cover:
+- objectives and HUD layout;
+- input isolation;
+- the docked in-world examination: framing, kneeling, body-part markers;
+- the supply bag and wrong-item feedback;
+- live patient tasks;
+- dressings and blankets visible on the body;
+- the Blender gloved hands;
+- the two-paramedic carry poses.
+
+See `Docs/TestEvidence/autotest_results.txt`.
 
 | Area | Checks | Highlights |
 |---|---|---|
