@@ -56,9 +56,11 @@ namespace GoldenHour
         {
             modal.SetHidden(true);
             hud.SetProgress(string.Empty, 0f, false);
+            FrameCasualty(casualty, 0.5f);
             FirstAidMinigame.Begin(this, casualty, kind, hud.OverlayRoot.transform, success =>
             {
                 modal.SetHidden(false);
+                if (examTarget == casualty && modal.IsOpen) FrameCasualty(casualty, ExamFramingX);
                 done(success);
                 if (examTarget == casualty && modal.IsOpen) BuildExamPanel();
             });

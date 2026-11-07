@@ -291,6 +291,7 @@ namespace GoldenHour
         {
             if (hud == null) return;
             hud.ModalOpen = modal.IsOpen && Phase != IncidentPhase.Debrief;
+            hud.ModalDocked = modal.IsOpen && modal.Docked && !modal.Hidden;
             hud.Tick();
             UpdateAction();
             bool minigameWasActive = FirstAidMinigame.Active;
@@ -713,6 +714,7 @@ namespace GoldenHour
         {
             if (actionDone == null)
             {
+                bodyMarker.Hide();
                 hud?.SetProgress(string.Empty, 0f, false);
                 return;
             }
@@ -944,6 +946,7 @@ namespace GoldenHour
         private void CloseModal()
         {
             modal.Close();
+            if (examTarget != null) examTarget.SetIdLabelVisible(true);
             examTarget = null;
             if (player != null)
             {
@@ -959,6 +962,16 @@ namespace GoldenHour
             hud.SetCompass(false, 0f, string.Empty);
             InteractionOutline.Show(null);
             modal.Show(title, body, size, reserved, closable);
+        }
+
+        /// <summary>Opens a compact panel on the right; the scene stays visible and un-dimmed on the left.</summary>
+        private void OpenDockedPanel(string title, string body, int buttonRows)
+        {
+            if (player != null) player.SetControlsEnabled(false);
+            hud.SetPrompt(string.Empty);
+            hud.SetCompass(false, 0f, string.Empty);
+            InteractionOutline.Show(null);
+            modal.ShowDocked(title, body, buttonRows);
         }
 
         private void RefreshHud()

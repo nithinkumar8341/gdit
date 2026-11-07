@@ -31,6 +31,14 @@ namespace GoldenHour
         private float eyeHeight = StandingEyeHeight;
         private float bobPhase;
         private bool kneelToggle;
+        private Vector3 glideFrom;
+        private Vector3 glideTo;
+        private Quaternion glideYawFrom;
+        private Quaternion glideYawTo;
+        private float glidePitchFrom;
+        private float glidePitchTo;
+        private float glideProgress = -1f;
+        private const float GlideSeconds = 0.45f;
 
         /// <summary>Raised on each footstep; the argument is true while walking faster.</summary>
         public event System.Action<bool> Stepped;
@@ -41,6 +49,7 @@ namespace GoldenHour
         public bool IsKneeling => ForcedKneel || kneelToggle;
         public float EyeHeight => eyeHeight;
         public float Speed { get; private set; }
+        public bool Gliding => glideProgress >= 0f;
 
         private void Awake()
         {
@@ -74,6 +83,7 @@ namespace GoldenHour
         /// <summary>Moves the player without fighting the CharacterController.</summary>
         public void Teleport(Vector3 position, float yaw, float viewPitch)
         {
+            glideProgress = -1f;
             if (characterController != null) characterController.enabled = false;
             transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
             if (characterController != null) characterController.enabled = true;
@@ -91,6 +101,56 @@ namespace GoldenHour
             SetPitch(-Mathf.Atan2(direction.y, flat.magnitude) * Mathf.Rad2Deg);
         }
 
+        /// <summary>
+        /// Moves (smoothly, or instantly) to <paramref name="feet"/> and turns so that <paramref name="focus"/> appears at
+        /// horizontal viewport position <paramref name="viewportX"/> as seen from kneeling eye height.
+        /// </summary>
+        public void FrameTarget(Vector3 feet, Vector3 focus, float viewportX, bool instant)
+        {
+            float eye = IsKneeling ? KneelingEyeHeight : StandingEyeHeight;
+            Vector3 direction = focus - (feet + Vector3.up * eye);
+            Vector3 flat = new Vector3(direction.x, 0f, direction.z);
+            if (flat.sqrMagnitude < 0.0001f) flat = transform.forward;
+            float yaw = Quaternion.LookRotation(flat).eulerAngles.y;
+            if (PlayerCamera != null)
+            {
+                float tanHalf = Mathf.Tan(PlayerCamera.fieldOfView * 0.5f * Mathf.Deg2Rad) * PlayerCamera.aspect;
+                yaw += Mathf.Atan((0.5f - viewportX) * 2f * tanHalf) * Mathf.Rad2Deg;
+            }
+
+            float targetPitch = Mathf.Clamp(-Mathf.Atan2(direction.y, flat.magnitude) * Mathf.Rad2Deg, -80f, 80f);
+            if (instant)
+            {
+                Teleport(feet, yaw, targetPitch);
+                eyeHeight = eye;
+                glideProgress = -1f;
+                return;
+            }
+
+            glideFrom = transform.position;
+            glideTo = feet;
+            glideYawFrom = transform.rotation;
+            glideYawTo = Quaternion.Euler(0f, yaw, 0f);
+            glidePitchFrom = pitch;
+            glidePitchTo = targetPitch;
+            glideProgress = 0f;
+            if (characterController != null) characterController.enabled = false;
+        }
+
+        private void UpdateGlide()
+        {
+            glideProgress = Mathf.Min(1f, glideProgress + Time.unscaledDeltaTime / GlideSeconds);
+            float t = Mathf.SmoothStep(0f, 1f, glideProgress);
+            transform.SetPositionAndRotation(Vector3.Lerp(glideFrom, glideTo, t), Quaternion.Slerp(glideYawFrom, glideYawTo, t));
+            SetPitch(Mathf.Lerp(glidePitchFrom, glidePitchTo, t));
+            if (glideProgress >= 1f)
+            {
+                glideProgress = -1f;
+                verticalVelocity = 0f;
+                if (characterController != null) characterController.enabled = true;
+            }
+        }
+
         private void SetPitch(float value)
         {
             pitch = Mathf.Clamp(value, -80f, 80f);
@@ -99,6 +159,13 @@ namespace GoldenHour
 
         private void Update()
         {
+            if (Gliding)
+            {
+                UpdateGlide();
+                UpdateCameraHeight();
+                return;
+            }
+
             if (characterController == null || !characterController.enabled) return;
             Vector2 movementInput = Vector2.zero;
             bool sprint = false;

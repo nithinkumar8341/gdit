@@ -163,22 +163,7 @@ namespace GoldenHour
                 if (!screenshotTaken && !casualty.Sim.InitiallyExpectant)
                 {
                     screenshotTaken = true;
-                    d.OpenExamination(casualty);
-                    yield return null;
-                    d.Hud.Toast(0, "Layout check A");
-                    d.Hud.Toast(0, "Layout check B");
-                    yield return new WaitForSecondsRealtime(1.2f);
-                    List<Rect> toastRects = d.Hud.ToastRects();
-                    bool apart = toastRects.Count >= 2;
-                    for (int a = 0; a < toastRects.Count; a++)
-                    {
-                        if (toastRects[a].xMin < 622f || toastRects[a].xMax > 800f) apart = false;
-                        for (int b = a + 1; b < toastRects.Count; b++) apart &= !toastRects[a].Overlaps(toastRects[b]);
-                    }
-
-                    Check(id + ": score messages are queued, never overlap and stay off the examination panel", apart,
-                        toastRects.Count + " visible: " + string.Join(" ", toastRects.ConvertAll(r => r.ToString("0"))));
-                    yield return Screenshot(id + "_06_examination");
+                    yield return InWorldExamination(d, casualty);
                 }
 
                 yield return GiveAid(d, casualty, casualty == retriageCase);
@@ -335,6 +320,79 @@ namespace GoldenHour
 
             if (findings.TryGetValue(ExamAction.GiveCommand, out Finding command)) state.followsCommands = command.text.Contains("squeezes");
             return StartTriage.Evaluate(state);
+        }
+
+        // ------------------------------------------------------ in-world exam
+
+        /// <summary>Docked panel, kneeling framing, toast layout and (tutorial) the body-part marker of a timed check.</summary>
+        private IEnumerator InWorldExamination(IncidentDirector d, Casualty casualty)
+        {
+            string id = d.Scenario.scenarioId;
+            d.OpenExamination(casualty);
+            yield return null;
+            yield return WaitFor(() => !d.player.Gliding, 2f);
+            yield return null;
+            Rect panel = d.Modal.PanelCanvasRect();
+            Check(id + ": examination opens as a compact panel docked on the right, without a full-screen backdrop",
+                d.Modal.IsOpen && d.Modal.Docked && panel.xMin > 0f && panel.width <= ModalWindow.DockWidth + 1f &&
+                GameObject.Find("Modal Backdrop") == null, panel.ToString("0"));
+
+            Camera view = d.player.PlayerCamera;
+            Vector3 viewport = view != null ? view.WorldToViewportPoint(casualty.FocusPoint) : Vector3.zero;
+            RectTransform canvas = (RectTransform)d.Modal.Panel.parent;
+            float panelLeft = (panel.xMin + canvas.rect.width * 0.5f) / canvas.rect.width;
+            Check(id + ": the casualty stays in view, left of the docked panel",
+                viewport.z > 0.2f && viewport.x > 0.05f && viewport.x < Mathf.Min(0.62f, panelLeft - 0.03f) && viewport.y > 0.05f && viewport.y < 0.95f,
+                "viewport " + viewport.ToString("0.00") + ", panel starts at " + panelLeft.ToString("0.00"));
+            Vector3 offset = d.player.transform.position - casualty.FocusPoint;
+            offset.y = 0f;
+            Check(id + ": the player kneels within arm's reach of " + casualty.Id, d.player.IsKneeling && offset.magnitude < 1.6f,
+                offset.magnitude.ToString("0.00") + " m");
+
+            d.Hud.Toast(0, "Layout check A");
+            d.Hud.Toast(0, "Layout check B");
+            yield return new WaitForSecondsRealtime(1.2f);
+            List<Rect> toastRects = d.Hud.ToastRects();
+            bool apart = toastRects.Count >= 2;
+            for (int a = 0; a < toastRects.Count; a++)
+            {
+                if (toastRects[a].Overlaps(panel) || toastRects[a].xMin < -canvas.rect.width * 0.5f) apart = false;
+                for (int b = a + 1; b < toastRects.Count; b++) apart &= !toastRects[a].Overlaps(toastRects[b]);
+            }
+
+            Check(id + ": score messages are queued, never overlap and stay off the examination panel", apart,
+                toastRects.Count + " visible: " + string.Join(" ", toastRects.ConvertAll(r => r.ToString("0"))) + " | panel " + panel.ToString("0"));
+            yield return Screenshot(id + "_06_examination");
+            if (id != "tutorial") yield break;
+
+            // A timed check shows a world-space marker on the body part involved (here: the forearm for circulation).
+            d.InstantActions = false;
+            d.PerformExam(casualty, ExamAction.CheckCirculation);
+            yield return null;
+            yield return null;
+            Transform forearm = null;
+            foreach (string arm in new[] { "LowerArm.L", "LowerArm.R" })
+            {
+                Transform joint = casualty.Body != null ? casualty.Body.Joint(arm) : null;
+                if (joint != null && (forearm == null || Vector3.Distance(joint.position, d.Marker.Target) < Vector3.Distance(forearm.position, d.Marker.Target))) forearm = joint;
+            }
+
+            Vector3 markerView = view != null ? view.WorldToViewportPoint(d.Marker.Position) : Vector3.zero;
+            Check("tutorial: a timed check shows a world-space marker on the body part (forearm for circulation)",
+                d.ActionRunning && d.Marker.Visible && d.Marker.Label == "Check circulation" && forearm != null &&
+                Vector3.Distance(d.Marker.Target, forearm.position) < 0.35f && Vector3.Distance(d.Marker.Position, d.Marker.Target) < 0.1f &&
+                markerView.z > 0f && markerView.x > 0f && markerView.x < 1f && markerView.y > 0f && markerView.y < 1f,
+                "marker " + d.Marker.Position.ToString("0.00") + " view " + markerView.ToString("0.00"));
+            yield return new WaitForSecondsRealtime(0.4f);
+            Check("tutorial: the action progress bar stays over the scene, clear of the tutorial tip and the docked panel",
+                !d.Hud.ProgressRect.Overlaps(panel) && (!d.Hud.TipVisible || !d.Hud.ProgressRect.Overlaps(d.Hud.TipRect)),
+                "progress " + d.Hud.ProgressRect.ToString("0") + " tip " + d.Hud.TipRect.ToString("0"));
+            yield return Screenshot("tutorial_06c_body_marker");
+            yield return WaitFor(() => !d.ActionRunning, 8f);
+            yield return null;
+            Check("tutorial: the marker disappears when the check completes and the finding is recorded",
+                !d.Marker.Visible && casualty.Findings.ContainsKey(ExamAction.CheckCirculation));
+            d.InstantActions = true;
         }
 
         // ----------------------------------------------------------------- aid

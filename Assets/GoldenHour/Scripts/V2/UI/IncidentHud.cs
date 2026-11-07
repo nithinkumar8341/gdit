@@ -155,6 +155,17 @@ namespace GoldenHour
         /// <summary>Canvas-space rectangles of the tip and radio panels (tests: overlap check).</summary>
         public Rect TipRect => CanvasRect(tipPanel);
         public Rect RadioRect => CanvasRect(radioPanel);
+        public Rect SubtitleRect => CanvasRect(subtitleBacking);
+
+        /// <summary>Action progress bar rectangle (overlay canvas, centred origin).</summary>
+        public Rect ProgressRect
+        {
+            get
+            {
+                RectTransform rect = (RectTransform)progressRoot.transform;
+                return new Rect(rect.anchoredPosition - rect.sizeDelta * 0.5f, rect.sizeDelta);
+            }
+        }
 
         private Rect CanvasRect(GameObject panel)
         {
@@ -216,6 +227,8 @@ namespace GoldenHour
             if (progressRoot.activeSelf != visible) progressRoot.SetActive(visible);
             if (!visible) return;
             progressRoot.transform.SetAsLastSibling();
+            // Docked panel open: just below the crosshair over the visible scene, clear of the tutorial tip.
+            ((RectTransform)progressRoot.transform).anchoredPosition = ModalDocked ? new Vector2(DockedShift, -40f) : new Vector2(0f, -110f);
             progressLabel.text = label;
             progressFill.anchorMax = new Vector2(Mathf.Clamp01(progress01), 1f);
         }
@@ -227,6 +240,30 @@ namespace GoldenHour
 
         /// <summary>Set by the director each frame: while a modal is open, toasts move to the right-hand column.</summary>
         public bool ModalOpen { get; set; }
+
+        /// <summary>Horizontal shift of centred messages while the docked panel covers the right-hand side.</summary>
+        public const float DockedShift = -282f;
+        private bool modalDocked;
+
+        /// <summary>
+        /// Set by the director each frame: while the docked examination panel is open, centred messages (toasts, tip,
+        /// subtitle, danger warning) move left so they stay over the visible scene instead of under the panel.
+        /// </summary>
+        public bool ModalDocked
+        {
+            get => modalDocked;
+            set
+            {
+                if (modalDocked == value) return;
+                modalDocked = value;
+                float x = value ? DockedShift : 0f;
+                foreach (GameObject shifted in new[] { subtitleBacking, tipPanel, dangerBacking })
+                {
+                    RectTransform rect = (RectTransform)shifted.transform;
+                    rect.anchoredPosition = new Vector2(x, rect.anchoredPosition.y);
+                }
+            }
+        }
 
         /// <summary>Toasts on screen plus queued ones (tests).</summary>
         public int ToastCount => toasts.Count + pendingToasts.Count;
@@ -273,7 +310,10 @@ namespace GoldenHour
         }
 
         /// <summary>Normal play: centred above the prompt. Modal open: a right-hand column beside the panel.</summary>
-        private Vector2 ToastSlot(int slot) => ModalOpen ? new Vector2(711f, 150f - slot * 72f) : new Vector2(0f, 60f + slot * 34f);
+        private Vector2 ToastSlot(int slot) => ModalDocked ? new Vector2(DockedShift, 60f + slot * 34f)
+            : ModalOpen ? new Vector2(711f, 150f - slot * 72f) : new Vector2(0f, 60f + slot * 34f);
+
+        private bool ToastColumn => ModalOpen && !ModalDocked;
 
         public void SetCompass(bool visible, float angle, string label)
         {
@@ -306,9 +346,9 @@ namespace GoldenHour
             {
                 if (toasts[i].text == null) continue;
                 RectTransform rect = toasts[i].text.rectTransform;
-                rect.sizeDelta = ModalOpen ? new Vector2(170f, 66f) : new Vector2(700f, 34f);
-                toasts[i].text.fontSizeMax = ModalOpen ? 15f : 20f;
-                toasts[i].text.alignment = ModalOpen ? TextAlignmentOptions.Right : TextAlignmentOptions.Center;
+                rect.sizeDelta = ToastColumn ? new Vector2(170f, 66f) : new Vector2(700f, 34f);
+                toasts[i].text.fontSizeMax = ToastColumn ? 15f : 20f;
+                toasts[i].text.alignment = ToastColumn ? TextAlignmentOptions.Right : TextAlignmentOptions.Center;
                 rect.anchoredPosition = ToastSlot(toasts.Count - 1 - i);
                 if (Time.time > toasts[i].end)
                 {

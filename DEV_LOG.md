@@ -132,3 +132,20 @@
   - **Scene clean-up:** the builder used to strip v1 components by type. It now removes missing-script components from Player and the camera, and the scenes no longer carry the GameManager or ScoreManager components.
   - **Docs:** CLAUDE.md now describes the v2 requirements. PROJECT_ANALYSIS.md and CLAUDE_CODE_HANDOFF.md moved to `Docs/history/`. LowPolyMannequin was removed from ASSET_CREDITS. AUDIT_FINAL.md is committed.
   - **Results:** 0 `warning CS` or `error CS` lines. The 4 player build warnings are TMP package shader pragmas. Unit tests 27/27; Validate Project passed; autotest 279/279; exit code 0.
+- **Phase 3 (intent):** In-world examination. The casualty stays visible: the player kneels beside them, and the camera frames them left of a compact panel docked on the right, with no full-screen backdrop. Timed checks and aid show a world-space marker on the body part involved. Timings, tag and retriage rules and scoring are unchanged.
+- **Phase 3 (done):**
+  - **Docked panel:** `ModalWindow.ShowDocked` gives a 540-unit panel on the right, below the clock and supplies and above the status line. It has a red title band and no backdrop. The examination uses it, with a compact 3-column layout of 6 checks, 4 tags, and 5 aid buttons plus Close. All labels fit at one text size. Other panels (dispatch, handover, tablet, pause) stay full-screen.
+  - **Kneel framing:** `IncidentDirector.Framing` looks for a clear spot 1.35 m from the casualty: beside the torso if they are lying, otherwise in front. It checks capsule overlap and ground height, ignoring casualties and the player. `FirstPersonPlayer.FrameTarget` glides there over 0.45 s (instantly with reduced motion), kneels, and turns so the casualty sits at viewport x 0.34. Minigames frame the casualty at the centre, then the camera returns to the exam framing. The floating ID label is hidden while examining.
+  - **Body-part markers:** a world-space marker (`BodyMarker`: pulsing red ring, white centre, label, drawn on top and facing the camera) follows the body part during a timed check or aid: chest for breathing, head for airway and commands, the nearer forearm for circulation, the bleeding site for bleeding and dressings, the leg for walking.
+  - **HUD:** while docked, toasts, the tip, subtitles, the danger warning and the progress bar move left over the visible scene.
+  - **Unchanged:** timings, tag and retriage rules and scoring.
+  - **Checks:** 279 → 294.
+    - Per scenario: the panel is docked without a backdrop; the casualty is in view left of the panel (viewport x 0.36–0.37 against a panel edge at 0.65); the player kneels within reach (1.35 m).
+    - Tutorial: the marker is on the forearm during "Check circulation" and hides when it completes; the progress bar stays clear of the tip and the panel.
+    - **Changed check:** the toast layout check now requires the toasts to stay off the docked panel's rectangle. Before, it required the old right-hand column (x 622–800), which only existed beside the full-screen exam modal.
+  - **Iterations from screenshots:**
+    - At 0.95 m the body filled the view and the head was out of frame, so the distance became 1.35 m.
+    - The marker label was too big, so it went from 0.75 to 0.34.
+    - The tag and exam buttons were truncated, so they now use short labels at one font size.
+    - The progress bar overlapped the tutorial tip, so it now moves while docked.
+  - **Results:** 0 `warning CS` or `error CS` lines; unit tests 27/27; Validate Project passed; autotest 294/294, exit code 0. Screenshots: `tutorial_06_examination`, `tutorial_06c_body_marker`, `highway/bus/building_06_examination`.

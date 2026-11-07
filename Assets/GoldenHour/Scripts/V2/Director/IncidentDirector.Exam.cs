@@ -60,6 +60,8 @@ namespace GoldenHour
             if (player != null) player.ForcedKneel = true;
             if (audioManager != null) audioManager.PlayPatient();
             Log("exam-open", casualty.Id, "Opened examination");
+            casualty.SetIdLabelVisible(false);
+            FrameCasualty(casualty, ExamFramingX);
             BuildExamPanel();
         }
 
@@ -92,11 +94,14 @@ namespace GoldenHour
             if (!GlovesOn) body.Append("\n<color=#FF8A8A>Gloves are OFF - hands-on checks and aid without gloves are penalised.</color>");
             if (HintsEnabled) body.Append("\n<size=85%><color=#F6D171>HINT (START): walking? -> breathing (open the airway if not) -> rate over 30? -> circulation (refill over 2 s / no radial pulse) -> follows commands?</color></size>");
 
-            OpenPanel(ExamTitlePrefix + casualty.Id, body.ToString(), new Vector2(1240f, 820f), 372f, true);
+            OpenDockedPanel(ExamTitlePrefix + casualty.Id, body.ToString(), 5);
             Transform panel = modal.Panel;
             bool idle = !ActionRunning && !Finished;
             bool alive = !casualty.Sim.State.deceased;
+            const float column = 170f;
+            Vector2 button = new Vector2(162f, 40f);
 
+            // Rows from the top: examination actions (2 rows), tags, aid (2 rows, Close in the last slot).
             ExamAction[] actions =
             {
                 ExamAction.AskToWalk, ExamAction.CheckBreathing, ExamAction.OpenAirway,
@@ -105,11 +110,9 @@ namespace GoldenHour
             for (int i = 0; i < actions.Length; i++)
             {
                 ExamAction action = actions[i];
-                float x = -400f + (i % 3) * 400f;
-                float y = modal.RowY(i < 3 ? 4 : 3);
-                Button button = UiFactory.Button(panel, ExamLabel(action) + "  <size=75%>(" + ExamSeconds(action).ToString("0.#") + " s)</size>",
-                    new Vector2(x, y), new Vector2(380f, 54f), () => PerformExam(casualty, action), Palette.Slate);
-                button.interactable = idle;
+                Button examButton = DockButton(panel, ExamLabel(action) + " <size=70%><color=#B8C2CC>" + ExamSeconds(action).ToString("0.#") + "s</color></size>",
+                    new Vector2((i % 3 - 1) * column, modal.RowY(i < 3 ? 4 : 3)), button, () => PerformExam(casualty, action), Palette.Slate);
+                examButton.interactable = idle;
             }
 
             TriageTag[] tags = { TriageTag.Red, TriageTag.Yellow, TriageTag.Green, TriageTag.Black };
@@ -118,24 +121,44 @@ namespace GoldenHour
                 TriageTag tag = tags[i];
                 TagRequestResult check = casualty.Record.Check(tag);
                 bool allowed = check == TagRequestResult.FirstTag || check == TagRequestResult.Retag;
-                string text = (casualty.Record.HasTag ? "RE-TAG " : "TAG ") + TriageTagVisual.UiLabel(tag).Split('|')[0].Trim();
-                Button button = UiFactory.Button(panel, text, new Vector2(-450f + i * 300f, modal.RowY(2)), new Vector2(285f, 54f),
+                string text = (casualty.Record.HasTag ? "<size=70%>RE-TAG</size> " : "<size=70%>TAG</size> ") +
+                              TriageTagVisual.UiLabel(tag).Split('|')[0].Trim().ToUpperInvariant();
+                Button tagButton = DockButton(panel, text, new Vector2(-189f + i * 126f, modal.RowY(2)), new Vector2(120f, 40f),
                     () => RequestTag(casualty, tag), TriageTagVisual.ColorFor(tag));
-                button.interactable = idle && allowed;
+                tagButton.interactable = idle && allowed;
             }
 
-            Treatment[] treatments = { Treatment.PressureDressing, Treatment.AirwayOpening, Treatment.RecoveryPosition, Treatment.Blanket, Treatment.Cpr };
+            Treatment[] treatments = { Treatment.PressureDressing, Treatment.RecoveryPosition, Treatment.Blanket, Treatment.Reassure, Treatment.Cpr };
             for (int i = 0; i < treatments.Length; i++)
             {
                 Treatment treatment = treatments[i];
-                if (treatment == Treatment.AirwayOpening) treatment = Treatment.Reassure;
-                Button button = UiFactory.Button(panel, TreatmentLabel(treatment), new Vector2(-480f + i * 240f, modal.RowY(1)),
-                    new Vector2(228f, 54f), () => RequestTreatment(casualty, treatment), new Color32(52, 92, 120, 255));
-                button.interactable = idle && alive && (casualty.Sim.Applied & treatment) == 0;
+                Button aidButton = DockButton(panel, DockTreatmentLabel(treatment), new Vector2((i % 3 - 1) * column, modal.RowY(i < 3 ? 1 : 0)),
+                    button, () => RequestTreatment(casualty, treatment), new Color32(52, 92, 120, 255));
+                aidButton.interactable = idle && alive && (casualty.Sim.Applied & treatment) == 0;
             }
 
-            UiFactory.Button(panel, "CLOSE  <size=75%>(Esc)</size>", new Vector2(0f, modal.RowY(0)), new Vector2(260f, 50f), CloseModal,
-                Palette.Charcoal);
+            DockButton(panel, "CLOSE <size=70%>(Esc)</size>", new Vector2(column, modal.RowY(0)), button, CloseModal, Palette.Charcoal);
+        }
+
+        /// <summary>Docked-panel button: one consistent, smaller text size so every label fits.</summary>
+        private static Button DockButton(Transform panel, string label, Vector2 position, Vector2 size, System.Action onClick, Color color)
+        {
+            Button button = UiFactory.Button(panel, label, position, size, onClick, color);
+            TMP_Text text = button.GetComponentInChildren<TMP_Text>();
+            text.fontSizeMax = 16f;
+            text.fontSizeMin = 11f;
+            text.margin = new Vector4(2f, 0f, 2f, 0f);
+            return button;
+        }
+
+        private string DockTreatmentLabel(Treatment treatment)
+        {
+            switch (treatment)
+            {
+                case Treatment.PressureDressing: return "Dressing <size=80%>(" + Dressings + " left)</size>";
+                case Treatment.Blanket: return "Blanket <size=80%>(" + Blankets + " left)</size>";
+                default: return TreatmentLabel(treatment);
+            }
         }
 
         private string TreatmentLabel(Treatment treatment)
@@ -162,6 +185,7 @@ namespace GoldenHour
         {
             if (ActionRunning || Finished) return;
             if (NeedsContact(action)) ApplyGlovePenalty(casualty, ExamLabel(action).ToLowerInvariant());
+            ShowMarker(casualty, ExamPart(casualty, action), ExamLabel(action));
             RunAction(ExamLabel(action) + " - " + casualty.Id, ExamSeconds(action), false, () =>
             {
                 string text = ExamResult(casualty, action);
@@ -296,6 +320,11 @@ namespace GoldenHour
             }
 
             if (treatment != Treatment.Reassure) ApplyGlovePenalty(casualty, TreatmentNames.Name(treatment).ToLowerInvariant());
+            if (treatment == Treatment.PressureDressing || treatment == Treatment.Blanket || treatment == Treatment.Reassure)
+            {
+                ShowMarker(casualty, TreatmentPart(casualty, treatment), TreatmentNames.Name(treatment));
+            }
+
             switch (treatment)
             {
                 case Treatment.PressureDressing:

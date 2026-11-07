@@ -39,6 +39,12 @@ namespace GoldenHour
         private TriageTagVisual tagVisual;
         private SpeechBark bark;
         private TextMeshPro idLabel;
+
+        /// <summary>Hides the floating ID while the player kneels beside the casualty (it would fill the view).</summary>
+        public void SetIdLabelVisible(bool visible)
+        {
+            if (idLabel != null) idLabel.enabled = visible;
+        }
         private BoxCollider bodyCollider;
         private float nextBark;
         private bool collapsedAnnounced;
