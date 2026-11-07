@@ -87,3 +87,8 @@
     - 0 errors and 0 warnings in project code.
     - Validate Project passed.
   - **Documents:** TESTING_REPORT.md rewritten for v2. `Docs/TestEvidence` refreshed with the results, screenshots, test XML and benchmark files. Release/ is git-ignored.
+- **M9 (course documents):**
+  - **New:** GDD.md (vision, pillars, audience, core loop and system diagrams in mermaid, mechanics, level design, art and audio, immersion, UX and accessibility, learning objectives and assessment, ethics, scope and risks, architecture, adaptive-difficulty model); PLAYTEST_PLAN.md (procedure, pre/post knowledge test, the 8 in-game Likert items, data, success criteria); PRESENTATION_OUTLINE.md (5-minute demo script); ASSET_CREDITS.md.
+  - **Rewritten:** README.md for v2.
+  - **Feedback screen:** the in-game questionnaire (main menu → Feedback) saves JSON. This is verified by the autotest.
+  - **Medical references:** named only as well-known public guidance and marked *(verify)*. The documents state that the content has NOT been medically reviewed.

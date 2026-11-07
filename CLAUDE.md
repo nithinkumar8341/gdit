@@ -21,7 +21,7 @@ Source of truth for spec/status history: `CLAUDE_CODE_HANDOFF.md`. Current progr
 
 - End-to-end test of the built player (exit code 0 = all passed; writes `autotest_results.txt` + screenshots):
   `Builds\GoldenHour\GoldenHour.exe -screen-fullscreen 0 -screen-width 1600 -screen-height 900 -goldenhour-autotest <dir>`
-- Player prefs: `GameSettings` (volume, mouse sensitivity, difficulty). Restart sets `GameplayController.ShuffleOnNextLoad`. Visual assets (unlit/smoke/sky materials, `GoldenHour/Settings/GH_PostProcessing.asset`) are created by Build Project.
+- Player prefs: `GameSettings` (volume, mouse sensitivity, difficulty). v2 gameplay runs on `IncidentDirector` (the v1 GameplayController stack was removed in M2); casualty positions are seeded-shuffled unless `Session.SeedOverride` is set. Benchmark: `-goldenhour-benchmark <dir> [-goldenhour-preset Medium] [-goldenhour-capped]`. Visual assets (unlit/smoke/sky materials, `GoldenHour/Settings/GH_PostProcessing.asset`) are created by Build Project.
 - Imported Blender FBXs flip the depth axis: the kit hinge ends up on the model's +Z side (kit is placed at yaw -20 so it opens away from the player).
 
 ## Requirements

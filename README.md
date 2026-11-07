@@ -1,116 +1,147 @@
-# Golden Hour
+# Golden Hour (v2)
 
-A first-person, low-poly **educational** road-accident rescue and first-aid triage simulation for Windows, built with Unity 6.6 (URP, Input System).
+A first-person **educational** serious game about the first minutes of a mass-casualty incident:
+- make the scene safe;
+- call 112;
+- sort casualties with **START triage**;
+- give simple first aid;
+- hand people to ambulances in the right order while the golden-hour clock runs.
 
-> **Disclaimer:** Golden Hour is an educational simulation. It is **not** medical training, medical advice or a substitute for emergency services. In a real emergency, call local emergency services and follow qualified professional guidance.
+It is a Windows game, built with Unity 6.6 (URP, Input System, AI Navigation).
+
+> **Disclaimer:** Golden Hour is an educational simulation only. It is **not** medical training or medical advice. The content has **NOT been medically reviewed** and should be checked by a qualified first-aid trainer. In a real emergency, call your local emergency number and follow professional guidance.
+
+Further documents:
+- [GDD.md](GDD.md): design, systems, learning objectives, ethics.
+- [PLAYTEST_PLAN.md](PLAYTEST_PLAN.md)
+- [PRESENTATION_OUTLINE.md](PRESENTATION_OUTLINE.md)
+- [ASSET_CREDITS.md](ASSET_CREDITS.md)
+- [TESTING_REPORT.md](TESTING_REPORT.md)
+- [DEV_LOG.md](DEV_LOG.md)
 
 ## Play
 
-1. Run `Builds/GoldenHour/GoldenHour.exe` (Windows 64-bit). Ship or copy the whole `Builds/GoldenHour/` folder **except** `GoldenHour_BackUpThisFolder_ButDontShipItWithYourGame`.
-2. Main menu: **Start Scenario**, **How to Play**, **Settings** (master volume, mouse sensitivity, difficulty; all saved), **Exit**. Scene changes fade through black.
-3. Read the briefing and press **Begin Scenario**.
+1. Unzip `Release/GoldenHour_Windows.zip`, or run `Builds/GoldenHour/GoldenHour.exe`. When you ship the folder, leave out `GoldenHour_BackUpThisFolder_ButDontShipItWithYourGame`.
+2. Main menu (live 3D backdrop):
+   - **Campaign** (four scenarios, unlocked in order by earning at least one star);
+   - **How to Play** (START steps, simplifications and disclaimer);
+   - **Settings**, **Feedback** (playtest questionnaire), **Credits**, **Exit**.
+3. Each scenario opens with a skippable fly-in and a briefing.
 
-### Controls
+### Scenarios
 
-| Input | Action |
+| Scenario | Casualties | What's new |
+|---|---|---|
+| Training Yard | 3 | Guided 8-step tutorial. |
+| Highway Collision | 6 | Traffic, fuel leak and fire; a motorcyclist; a casualty who worsens. |
+| Night Bus Rollover | 10 | Night, rain, one dressing for two bleeders, an airway emergency, an expectant passenger. |
+| Collapsed Community Hall | 12 | Unstable structure, gas, a live wire, children, a walking-wounded crowd. |
+
+### Controls (rebindable in Settings)
+
+| Keyboard / mouse | Gamepad | Action |
+|---|---|---|
+| W A S D, mouse | Left stick, right stick | Move, look |
+| Left Shift | Left stick press | Walk faster |
+| E | A / South | Interact: examine, mark a hazard, take the bag, calm a bystander, talk to the paramedic |
+| C | B / East | Kneel |
+| G | D-pad right | Put on gloves |
+| R | D-pad up | Radio: 112 dispatch report and radio log |
+| Q | D-pad left | Shout: "If you can walk, go to the green zone" |
+| Tab | Select / View | Casualty tablet |
+| Space / left mouse | Right trigger | Hold pressure, confirm minigame steps, CPR compressions |
+| A / D | Left stick X | Roll the casualty (recovery position) |
+| F10 | Right stick press | Photo mode (freezes the clock; Space saves a PNG) |
+| Esc | Start | Pause, close a panel, skip a cutscene |
+
+### How a scenario plays
+
+1. **Scene safety.** Collect the first-aid bag, mark hazards and put on gloves. Touching a casualty without gloves costs points.
+2. **Dispatch.** Radio 112 with the location, casualty count and hazards. Each field is scored.
+3. **Walking wounded.** Shout. Everyone who can walk goes to the green zone and is tagged GREEN.
+4. **Examine and tag.** Kneel and use timed checks: breathing (open the airway if absent), rate, capillary refill or radial pulse, commands. Then attach a physical tag: RED, YELLOW, GREEN or BLACK.
+   - Only your first tag is scored in full.
+   - A retag needs a fresh examination.
+5. **First aid.**
+   - Hold-to-apply pressure dressing.
+   - Airway opening.
+   - A recovery-position roll minigame.
+   - A blanket.
+   - Reassurance.
+   - A CPR rhythm minigame (100–120/min). It is never scored, and the game explains why CPR is deprioritised in mass-casualty triage.
+6. **Ambulances.** They arrive in waves. Hand over the highest START priority first; the paramedics carry casualties on a stretcher.
+7. **Debrief.** Tabs show:
+   - **Summary:** stars and feedback.
+   - **Timeline:** with decision times.
+   - **Casualties:** your tag against START, with the START step that applied.
+   - **Map:** a movement heatmap.
+   - **Stats.**
+
+   Each run is saved as JSON.
+
+Casualties deteriorate on a seeded physiology model, and untreated life threats can become preventable deaths. **Adaptive difficulty** uses the mean of your last three score ratios: 80% or more speeds up deterioration (×1.2); 45% or less slows it (×0.85) and turns hints on. Settings also offer Easy and Normal.
+
+### Accessibility and settings
+
+- Graphics presets Low/Medium/High and resolution.
+- Key rebinding.
+- Subtitles; colour-blind tags with shapes, stripes and priority numbers; text size; reduce motion; stress effects on/off.
+- Master, music and SFX volume; mouse sensitivity.
+- Full gamepad support.
+
+### Saved data
+
+`%USERPROFILE%\AppData\LocalLow\Golden Hour Learning\Golden Hour\` holds:
+
+| File / folder | Contents |
 |---|---|
-| W A S D | Move |
-| Mouse | Look |
-| Left Shift | Walk faster |
-| E | Examine the person / open the first-aid kit you are looking at (shown by the on-screen prompt) |
-| Esc | Pause (volume, mouse sensitivity, Resume, Restart, Main Menu) or close the current panel |
-
-### Scenario loop
-
-**Accident → find patients → examine → triage → first-aid kit → select supply → simulated aid → objectives → final report**
-
-- You start just behind the barriers with the crash in view. A tip explains the controls for the first 15 seconds.
-- Five people are at the scene. Each has a pulsing beacon above them, and the arrow at the top of the HUD points to the nearest person you have not examined (then to the kit while aid is pending). Look at a person and press **E** to see their observations: walking, breathing, responsiveness and bleeding. The expected answer is **not** shown until you choose **RED / Immediate**, **YELLOW / Delayed** or **GREEN / Minor**.
-- Feedback explains the reasoning. You can **reassess** anyone at any time; correcting a decision updates the score.
-- Open the red first-aid kit (the lid animates open). Choose a triaged person (highest priority listed first), then pick a supply. A mismatched supply gives feedback and no credit.
-- Objectives on the HUD tick off live. The scenario ends when everyone has received simulated aid or the 15-minute timer runs out. The timer pauses while a panel is open.
-- The final report shows the score out of 1050, a rating, per-person results and the disclaimer, with **Restart** and **Main Menu**.
-
-**Difficulty:** *Easy* adds a checklist of what to look for to each examination (walking, breathing, severe bleeding, responsiveness) and a hint on the supply screen. *Normal* gives no hints. Scoring is identical.
-
-**Replay:** each **Restart** puts the five people in different positions. Their data, the triage rule and the scoring do not change.
-
-**Simplified START-style rule used by the game:** able to walk → GREEN; not breathing, severe visible bleeding or unresponsive → RED; otherwise → YELLOW.
-
-**Scoring:** correct triage +100, simulated aid +75, each of 5 objectives +25. Each wrong triage decision −15, each wrong supply −10. The time bonus is capped at +50, so it can never outweigh a single correct triage.
-
-## Visuals and performance
-
-Warm late-afternoon sun with soft shadows, a procedural sky, linear haze and URP post-processing: bloom, vignette, colour grading, white balance, and the renderer's screen-space ambient occlusion at half resolution. The damaged car has flashing hazard lights and engine smoke. The roadside has skid marks, glass, fences, grass, street lights and signs. To keep it smooth on laptops, shadows use 2 cascades up to 45 m, there is one extra point light, and the smoke is limited to 60 particles.
+| `profile.json` | Campaign, best scores, recent ratios |
+| `Runs\*.json` | Telemetry per run |
+| `Feedback\*.json` | Questionnaire answers |
+| `Photos\*.png` | Photo-mode captures |
 
 ## Project layout
 
 | Path | Contents |
 |---|---|
-| `Assets/Scenes/Samplespace.unity` | Gameplay scene (keeps the original Player, GameManager, ScoreManager, EventSystem) |
-| `Assets/GoldenHour/Scenes/MainMenu.unity` | Main menu scene (build index 0) |
-| `Assets/GoldenHour/Scripts/` | Runtime code, namespace `GoldenHour`: `Core/` (GameplayController, ObjectiveTracker, Palette, MaterialFactory), `Environment/`, `Patients/`, `Triage/`, `FirstAid/`, `Player/`, `UI/`, `Audio/`, `Testing/` |
-| `Assets/Scripts/` | Original project scripts. `GameManager` and `ScoreManager` are extended and still used |
-| `Assets/GoldenHour/ScriptableObjects/` | `Patient_P01..P05` (PatientData) and five `Supply_*` (SupplyData) assets |
-| `Assets/GoldenHour/Blender/` | `generate_assets.py`, `generate_audio.py`, the `.blend` source and FBX exports |
-| `Assets/GoldenHour/Audio/` | Procedurally generated WAVs (ambience, UI click/hover, footstep, kit, objective, patient) |
-| `Assets/GoldenHour/Materials/`, `Assets/GoldenHour/Settings/` | Runtime material templates, smoke material/texture, sky material and the post-processing profile (all created by **Build Project**) |
-| `Assets/GoldenHour/Editor/GoldenHourProjectBuilder.cs` | Editor automation (menu **GoldenHour**) |
-| `Docs/TestEvidence/` | Latest automated playtest log and screenshots |
+| `Assets/GoldenHour/Core/` | `GoldenHour.Core` assembly: START evaluator, physiology and deterioration, triage records, scoring, adaptive difficulty, telemetry (pure C#) |
+| `Assets/GoldenHour/Scripts/V2/` | Runtime: `Director/` (IncidentDirector partials, FirstAidMinigame), `Characters/`, `World/` (environments, hazards, ambulances, paramedics, bystanders), `UI/`, `Input/`, `Presentation/` (cutscenes, viewmodel hands, stress, photo mode), `Debrief/`, `Data/` |
+| `Assets/GoldenHour/Scripts/` (other folders) | Shared code: player controller, audio, menu, UI factory, environment, settings |
+| `Assets/GoldenHour/ScriptableObjects/V2/` | `Casualties/*.asset` (CasualtyProfile), `Scenarios/*.asset` (ScenarioData), `Campaign.asset` |
+| `Assets/GoldenHour/Blender/` | `generate_assets.py` (v1 props), `generate_v2_assets.py` (rigs, vehicles, stretcher, props), `generate_audio.py`, sources and FBX exports |
+| `Assets/GoldenHour/Editor/` | `GoldenHourProjectBuilder` (menu **GoldenHour**), `GoldenHourContent` (scenario data), `V2ModelPostprocessor` |
+| `Assets/GoldenHour/Tests/Editor/` | Edit-mode NUnit tests |
+| `Assets/Scenes/Samplespace.unity`, `Assets/GoldenHour/Scenes/MainMenu.unity` | Gameplay and menu scenes |
+| `Docs/TestEvidence/` | Latest autotest log, benchmark and screenshots |
 
-## Rebuild from source
+## Rebuild and test
 
-Requirements: Unity **6000.6.2f1** and Blender **5.2** (only needed to regenerate assets). **Close the Unity Editor** before running batch commands.
+Requirements: Unity **6000.6.2f1**; Blender **5.2** and Python 3 are needed only to regenerate assets. **Close the Unity Editor** before running batch commands.
 
 ```powershell
 $unity = 'C:\Program Files\Unity\Hub\Editor\6000.6.2f1\Editor\Unity.exe'
 $proj  = 'C:\gdit\My project (3)\My project (2)'
+$blender = 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe'
 
-# Optional: regenerate Blender models and procedural audio
-& 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background --factory-startup `
-  --python "$proj\Assets\GoldenHour\Blender\generate_assets.py"
+# Optional: regenerate models and audio
+& $blender --background --factory-startup --python "$proj\Assets\GoldenHour\Blender\generate_assets.py"
+& $blender --background --factory-startup --python "$proj\Assets\GoldenHour\Blender\generate_v2_assets.py"
 python "$proj\Assets\GoldenHour\Blender\generate_audio.py"
 
-# Create data assets + scenes, wire references and build settings, then validate
+# Content, scenes, references, build settings + validation
 & $unity -batchmode -nographics -quit -projectPath $proj -logFile build.log `
   -executeMethod GoldenHour.EditorTools.GoldenHourProjectBuilder.BuildProject
 
-# Validate only
-& $unity -batchmode -nographics -quit -projectPath $proj -logFile validate.log `
-  -executeMethod GoldenHour.EditorTools.GoldenHourProjectBuilder.ValidateProject
+# Edit-mode unit tests
+& $unity -batchmode -nographics -projectPath $proj -runTests -testPlatform EditMode -testResults tests.xml -logFile tests.log
 
 # Windows player -> Builds/GoldenHour/GoldenHour.exe
 & $unity -batchmode -nographics -quit -projectPath $proj -logFile player.log `
   -executeMethod GoldenHour.EditorTools.GoldenHourProjectBuilder.BuildWindowsPlayer
+
+# End-to-end playtest of all four scenarios (exit code 0 = all checks passed)
+Builds\GoldenHour\GoldenHour.exe -screen-fullscreen 0 -screen-width 1600 -screen-height 900 -goldenhour-autotest out\autotest
+
+# Frame-rate benchmark (preset Low|Medium|High)
+Builds\GoldenHour\GoldenHour.exe -screen-fullscreen 1 -screen-width 1920 -screen-height 1080 -goldenhour-benchmark out\bench -goldenhour-preset Medium
 ```
-
-The same three actions are available in the Editor under the **GoldenHour** menu. `Build Project` is idempotent: it updates existing assets in place.
-
-## Automated playtest
-
-The player build contains an end-to-end playtest that only runs when explicitly requested:
-
-```powershell
-.\Builds\GoldenHour\GoldenHour.exe -screen-fullscreen 0 -screen-width 1600 -screen-height 900 `
-  -goldenhour-autotest .\autotest-output
-```
-
-It covers:
-
-- the menus, fades and button feedback;
-- settings: volume, sensitivity and difficulty;
-- WASD (with footsteps) and E/Esc through the Input System;
-- the compass, beacons and tutorial;
-- the visual setup: overlay HUD, fog, post-processing, smoke and hazard lights;
-- raycast interaction with every patient;
-- triage, including a wrong-then-reassessed decision and the Easy hint;
-- kit opening, and wrong and correct supplies;
-- the final report;
-- Restart with shuffled positions and Normal difficulty;
-- Main Menu.
-
-The playtest restores your saved settings when it finishes. It writes `autotest_results.txt` and screenshots, then exits with code 0 (all passed) or 1. See `TESTING_REPORT.md`.
-
-## Editing content
-
-Patient and supply data are ScriptableObjects. Edit them in the Inspector, or change `CreateGameData()` in the builder and rerun **Build Project**. **Validate Project** rejects any patient whose observations do not produce its expected triage under the game's rule, and checks the 1–2 RED / 2 YELLOW / 1–2 GREEN distribution.
