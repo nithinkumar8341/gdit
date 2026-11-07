@@ -1,6 +1,7 @@
 # GOLDEN HOUR — Claude Code project instructions
 
 Source of truth for spec/status history: `CLAUDE_CODE_HANDOFF.md`. Current progress: `DEV_LOG.md`.
+**Active spec: `V2_SPEC.md` (Golden Hour v2 serious-game upgrade, milestones M1-M10). It overrides v1 requirements where they conflict.**
 
 ## Project and tools
 
