@@ -946,6 +946,7 @@ namespace GoldenHour
         private void CloseModal()
         {
             modal.Close();
+            bagOpen = false;
             if (examTarget != null) examTarget.SetIdLabelVisible(true);
             examTarget = null;
             if (player != null)
@@ -997,6 +998,7 @@ namespace GoldenHour
                     .Append("); re-check people\n");
                 objectives.Append(Check(toHand > 0 && handed == toHand)).Append("Hand over by priority (").Append(handed).Append("/").Append(toHand).Append(" sent)");
                 if (dead > 0) objectives.Append("\n<color=#FF8A8A>Deaths: ").Append(dead).Append("</color>");
+                AppendPatientTasks(objectives);
             }
 
             hud.SetObjectives(objectives.ToString());

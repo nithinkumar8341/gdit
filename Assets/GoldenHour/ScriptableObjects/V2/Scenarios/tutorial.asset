@@ -89,5 +89,5 @@ MonoBehaviour:
   - 'Press {Radio} and send the dispatch report to 112: number, location, casualties, hazards.'
   - 'Shout for the walking wounded ({Shout}): anyone who can walk goes to the green zone.'
   - 'Examine and tag the others ({Interact}): check breathing, circulation and commands, then choose a tag.'
-  - 'Give the aid each person needs: hold {Primary} on a pressure dressing for heavy bleeding; recovery position for an unresponsive person who is breathing.'
+  - 'Give the aid each person needs: open the SUPPLY BAG and take a pressure dressing for heavy bleeding (hold {Primary}); recovery position for an unresponsive person who is breathing.'
   - When the ambulance arrives, talk to the paramedic ({Interact}) and hand over the most urgent casualty first.

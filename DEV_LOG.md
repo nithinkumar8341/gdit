@@ -149,3 +149,36 @@
     - The tag and exam buttons were truncated, so they now use short labels at one font size.
     - The progress bar overlapped the tutorial tip, so it now moves while docked.
   - **Results:** 0 `warning CS` or `error CS` lines; unit tests 27/27; Validate Project passed; autotest 294/294, exit code 0. Screenshots: `tutorial_06_examination`, `tutorial_06c_body_marker`, `highway/bus/building_06_examination`.
+- **Phase 4 (intent and design note):** Supply bag and patient objectives.
+  - **Bag.** The examination panel's "Supply bag" button opens a bag view in the docked panel, listing items with their remaining counts:
+    - Pressure dressing and Foil blanket (consumed, scenario counts);
+    - Gloves (spare pairs; puts them on);
+    - three items that are not used in START triage: Splint, Cold pack, Triangular sling.
+    - Picking a not-for-triage item gives feedback explaining that START only allows quick life-saving steps (open the airway, control severe bleeding, position). Nothing is consumed and the score is unchanged; it is logged as a `wrong-item` telemetry event.
+    - A real item that is not indicated keeps its existing −15 rule, and the status line now says why.
+    - The technique buttons (recovery position, reassure, CPR) stay in the exam view.
+  - **Patient tasks.** The pure-C# `GoldenHour.Core.PatientTasks` derives live per-casualty tasks, shown in a "PATIENT TASKS" HUD panel (top 3 pending, priority-sorted, done items ticked for 4 s).
+    - A need appears only after the finding that would reveal it:
+      - "Open the airway of X" after "NOT breathing";
+      - "Control bleeding on X" after a bleeding finding;
+      - "Recovery position for X" after the commands check;
+      - "Keep X warm" once tagged;
+      - "Tag X" once examined;
+      - "Re-check X" when the condition worsened after the last examination.
+    - Needs come from the casualty's indicated care (the same source as the aid objective), so a task never asks for care that would be penalised.
+  - **Scoring:** unchanged. The autotest tally still has to match the ledger exactly.
+  - **Tests:** unit tests for PatientTasks, plus autotest checks for the bag (counts, wrong-item feedback with no score or consumption, a dressing applied from the bag) and tasks (absent before the finding, present after, ticked after the aid).
+- **Phase 4 (done):**
+  - **Code:** `Core/PatientTasks.cs` (pure C#); `IncidentDirector.Supplies.cs` (bag view: `OpenBag`, `PickBagItem`, `CloseBag`; task tracking; `WrongItemPicks`).
+  - **Exam view:** supplies (dressings, blankets) now come only from the SUPPLY BAG button. Recovery position, reassure and CPR remain technique buttons.
+  - **Feedback:** a non-indicated real item keeps its −15 and now explains why in the status line.
+  - **Tutorial text:** step 7 now says to "open the SUPPLY BAG". Both the tutorial asset (an Inspector-style edit) and the `GoldenHourContent` defaults were updated.
+  - **Tasks:** shown under PATIENT TASKS in the objectives panel (top 3 pending, then ticks done in the last 4 s).
+  - **Scoring:** unchanged. The exact tally matched in all four scenarios.
+  - **Tests:**
+    - Unit tests 27 → 29: tasks are revealed only by findings; no care that is not indicated; inactive casualties have no tasks; priority order.
+    - Autotest 294 → 309:
+      - per scenario: no tasks before any examination; "Control bleeding on X" appears after the bleeding check and is ticked after the dressing;
+      - tutorial: the bag opens with counts; a splint gives START feedback with no score change or consumption; a dressing from the bag is applied and one is used up.
+  - **Results:** 0 `warning CS` or `error CS` lines; Validate Project passed; autotest 309/309, exit code 0. Screenshot: `tutorial_07a_supply_bag`.
+  - **Process note:** two compile errors were fixed in the loop (a Python-patched `\n` literal, and `Exists` on an `IReadOnlyList`).

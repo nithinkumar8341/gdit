@@ -369,5 +369,54 @@ namespace GoldenHour.Tests
             {
                 StringAssert.DoesNotMatch("[a-z][A-Z]", TreatmentNames.Name(single), "no CamelCase identifiers in player-facing names");
             }
+        }
+
+        [Test]
+        public void PatientTasksAppearOnlyAfterTheRevealingFinding()
+        {
+            PatientTaskInput bleeder = new PatientTaskInput
+            {
+                casualtyId = "P03", careNeeded = Treatment.PressureDressing | Treatment.Blanket, active = true, examined = true
+            };
+            List<PatientTask> tasks = PatientTasks.Build(new[] { bleeder });
+            Assert.AreEqual(1, tasks.Count, "only the tag task before the bleeding check");
+            Assert.AreEqual("Tag P03", tasks[0].Text);
+
+            bleeder.bleedingChecked = true;
+            tasks = PatientTasks.Build(new[] { bleeder });
+            Assert.AreEqual("Control bleeding on P03", tasks[0].Text, "bleeding is the most urgent revealed need");
+            Assert.IsFalse(tasks[0].done);
+
+            bleeder.applied = Treatment.PressureDressing;
+            bleeder.tagged = true;
+            tasks = PatientTasks.Build(new[] { bleeder });
+            Assert.AreEqual(PatientTaskKind.KeepWarm, tasks[0].kind, "pending tasks come before done ones");
+            Assert.IsTrue(tasks.Exists(t => t.kind == PatientTaskKind.ControlBleeding && t.done));
+            Assert.IsTrue(tasks.Exists(t => t.kind == PatientTaskKind.Tag && t.done));
+        }
+
+        [Test]
+        public void PatientTasksNeverAskForCareThatIsNotIndicated()
+        {
+            PatientTaskInput walker = new PatientTaskInput
+            {
+                casualtyId = "P01", careNeeded = Treatment.None, active = true, examined = true, tagged = true,
+                breathingChecked = true, bleedingChecked = true, commandsChecked = true
+            };
+            PatientTaskInput gone = new PatientTaskInput
+            {
+                casualtyId = "P02", careNeeded = Treatment.PressureDressing, active = false, examined = true, bleedingChecked = true
+            };
+            PatientTaskInput airway = new PatientTaskInput
+            {
+                casualtyId = "P04", careNeeded = Treatment.AirwayOpening | Treatment.RecoveryPosition, active = true, examined = true,
+                breathingChecked = true, tagged = true, worsenedSinceExam = true
+            };
+            List<PatientTask> tasks = PatientTasks.Build(new[] { walker, gone, airway });
+            Assert.IsFalse(tasks.Exists(t => t.casualtyId == "P02"), "transported, green-zone or deceased casualties have no tasks");
+            Assert.IsFalse(tasks.Exists(t => t.casualtyId == "P01" && t.kind != PatientTaskKind.Tag), "no aid tasks without indicated care");
+            Assert.AreEqual("Open the airway of P04", tasks[0].Text);
+            Assert.AreEqual("Re-check P04 (condition changed)", tasks[1].Text);
+            Assert.IsFalse(tasks.Exists(t => t.kind == PatientTaskKind.RecoveryPosition), "recovery position appears only after the commands check");
         }    }
 }

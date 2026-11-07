@@ -57,6 +57,7 @@ namespace GoldenHour
 
             if (!casualty.CanInteract) return;
             examTarget = casualty;
+            bagOpen = false;
             if (player != null) player.ForcedKneel = true;
             if (audioManager != null) audioManager.PlayPatient();
             Log("exam-open", casualty.Id, "Opened examination");
@@ -69,6 +70,12 @@ namespace GoldenHour
         {
             Casualty casualty = examTarget;
             if (casualty == null) return;
+            if (bagOpen)
+            {
+                BuildBagPanel();
+                return;
+            }
+
             CasualtyProfile profile = casualty.Profile;
             StringBuilder body = new StringBuilder();
             body.Append("<b>").Append(profile.displayName).Append("</b>, about ").Append(profile.age).Append(" - ").Append(profile.appearance);
@@ -128,12 +135,17 @@ namespace GoldenHour
                 tagButton.interactable = idle && allowed;
             }
 
-            Treatment[] treatments = { Treatment.PressureDressing, Treatment.RecoveryPosition, Treatment.Blanket, Treatment.Reassure, Treatment.Cpr };
-            for (int i = 0; i < treatments.Length; i++)
+            // Supplies come from the bag; techniques (positioning, reassurance, CPR) are buttons here.
+            Button bagButton = DockButton(panel, "SUPPLY BAG <size=75%>dressings, blankets, gloves...</size>", new Vector2(-column * 0.5f, modal.RowY(1)),
+                new Vector2(332f, 40f), () => OpenBag(casualty), new Color32(150, 30, 38, 255));
+            bagButton.interactable = idle;
+            Treatment[] techniques = { Treatment.RecoveryPosition, Treatment.Cpr, Treatment.Reassure };
+            Vector2[] positions = { new Vector2(column, modal.RowY(1)), new Vector2(-column, modal.RowY(0)), new Vector2(0f, modal.RowY(0)) };
+            for (int i = 0; i < techniques.Length; i++)
             {
-                Treatment treatment = treatments[i];
-                Button aidButton = DockButton(panel, DockTreatmentLabel(treatment), new Vector2((i % 3 - 1) * column, modal.RowY(i < 3 ? 1 : 0)),
-                    button, () => RequestTreatment(casualty, treatment), new Color32(52, 92, 120, 255));
+                Treatment treatment = techniques[i];
+                Button aidButton = DockButton(panel, DockTreatmentLabel(treatment), positions[i], button,
+                    () => RequestTreatment(casualty, treatment), new Color32(52, 92, 120, 255));
                 aidButton.interactable = idle && alive && (casualty.Sim.Applied & treatment) == 0;
             }
 
@@ -366,6 +378,8 @@ namespace GoldenHour
             {
                 if (treatment != Treatment.Reassure)
                 {
+                    hud.SetStatus("Wrong choice for " + casualty.Id + ": " + TreatmentNames.Name(treatment).ToLowerInvariant() +
+                                  " was not needed. Base aid on the findings (bleeding check, breathing, response).", 7f);
                     Score("aid", ScoreRules.TreatmentNotIndicated, TreatmentLabel(treatment).Split('(')[0].Trim() + " was not needed for " + casualty.Id,
                         casualty.Id);
                 }

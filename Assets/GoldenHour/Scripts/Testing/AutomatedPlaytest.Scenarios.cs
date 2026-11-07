@@ -112,6 +112,9 @@ namespace GoldenHour
             Check(id + ": dispatch scored field by field (wrong number in the bus scenario)", d.DispatchFieldsCorrect == fields && d.Phase == IncidentPhase.Response,
                 d.DispatchFieldsCorrect + "/4");
             d.ClosePanel();
+            yield return null;
+            Check(id + ": patient tasks stay hidden until a finding reveals them (none before any examination)",
+                d.PatientTaskList.Count == 0 && !d.ObjectivesText.Contains("PATIENT TASKS"), d.PatientTaskList.Count + " task(s)");
 
             if (skipGloves)
             {
@@ -157,9 +160,20 @@ namespace GoldenHour
             List<Casualty> queue = d.Casualties.FindAll(c => !c.InGreenZone && c != deathCase);
             queue.Sort((a, b) => Urgency(a).CompareTo(Urgency(b)));
             bool screenshotTaken = false;
+            Casualty taskCase = null;
             foreach (Casualty casualty in queue)
             {
                 yield return ExamineAndTag(d, casualty, casualty == wrongTagCase);
+                bool needsDressing = (IncidentDirector.CareNeeded(casualty) & Treatment.PressureDressing) != 0 && !casualty.Sim.State.deceased;
+                if (taskCase == null && needsDressing && d.Dressings > 0)
+                {
+                    taskCase = casualty;
+                    yield return null;
+                    Check(id + ": the bleeding finding adds the live task \"Control bleeding on " + casualty.Id + "\"",
+                        d.PatientTaskList.Exists(t => t.casualtyId == casualty.Id && t.kind == PatientTaskKind.ControlBleeding && !t.done) &&
+                        d.ObjectivesText.Contains("Control bleeding on " + casualty.Id), Flat(d.ObjectivesText));
+                }
+
                 if (!screenshotTaken && !casualty.Sim.InitiallyExpectant)
                 {
                     screenshotTaken = true;
@@ -167,6 +181,14 @@ namespace GoldenHour
                 }
 
                 yield return GiveAid(d, casualty, casualty == retriageCase);
+                if (casualty == taskCase)
+                {
+                    yield return null;
+                    Check(id + ": the task is ticked once the dressing is applied to " + casualty.Id,
+                        d.PatientTaskList.Exists(t => t.casualtyId == casualty.Id && t.kind == PatientTaskKind.ControlBleeding && t.done) &&
+                        !d.ObjectivesText.Contains("[  ] Control bleeding on " + casualty.Id), Flat(d.ObjectivesText));
+                }
+
                 d.ClosePanel();
             }
 
@@ -322,6 +344,34 @@ namespace GoldenHour
             return StartTriage.Evaluate(state);
         }
 
+        // ---------------------------------------------------------- supply bag
+
+        /// <summary>Tutorial: open the bag, pick a not-for-triage item (feedback only), then take the dressing from the bag.</summary>
+        private IEnumerator SupplyBag(IncidentDirector d, Casualty casualty)
+        {
+            d.OpenBag(casualty);
+            yield return null;
+            Check("tutorial: the supply bag opens in the docked panel with item counts",
+                d.Modal.Docked && d.Modal.Title == IncidentDirector.BagTitlePrefix + casualty.Id &&
+                ScreenTextContains("Pressure dressing") && ScreenTextContains("x" + d.Dressings) && ScreenTextContains("Splint"));
+            int score = d.Ledger.Total;
+            int dressings = d.Dressings;
+            int blankets = d.Blankets;
+            d.PickBagItem(BagItem.Splint);
+            yield return null;
+            Check("tutorial: a wrong item (splint) gives START feedback, uses nothing and does not change the score",
+                d.WrongItemPicks == 1 && d.Hud.StatusText.Contains("START") && d.Ledger.Total == score && d.Dressings == dressings &&
+                d.Blankets == blankets && d.Modal.Title.StartsWith(IncidentDirector.BagTitlePrefix), d.Hud.StatusText);
+            yield return Screenshot("tutorial_07a_supply_bag");
+            d.PickBagItem(BagItem.PressureDressing);
+            yield return WaitFor(() => !d.ActionRunning, 5f);
+            Check("tutorial: the pressure dressing taken from the bag is applied and one is used up",
+                (casualty.Sim.Applied & Treatment.PressureDressing) != 0 && d.Dressings == dressings - 1 &&
+                d.Modal.Title == IncidentDirector.ExamTitlePrefix + casualty.Id);
+        }
+
+        private static string Flat(string text) => Regex.Replace(text ?? string.Empty, "<[^>]+>", string.Empty).Replace("\n", " | ");
+
         // ------------------------------------------------------ in-world exam
 
         /// <summary>Docked panel, kneeling framing, toast layout and (tutorial) the body-part marker of a timed check.</summary>
@@ -410,6 +460,10 @@ namespace GoldenHour
                 if (treatment == Treatment.RecoveryPosition && d.Scenario.scenarioId == "tutorial")
                 {
                     yield return RecoveryMinigame(d, casualty);
+                }
+                else if (treatment == Treatment.PressureDressing && d.Scenario.scenarioId == "tutorial")
+                {
+                    yield return SupplyBag(d, casualty);
                 }
                 else
                 {
