@@ -1,0 +1,8 @@
+Golden Hour benchmark | 2026-11-07 14:33:17Z | Unity 6000.6.2f1
+GPU: Intel(R) Iris(R) Xe Graphics (Direct3D11, 8025 MB)
+CPU: 12th Gen Intel(R) Core(TM) i5-12500H | RAM 16050 MB
+Resolution: 1920x1080 FullScreenWindow | preset Medium | vSync off, uncapped
+tutorial: average 210.0 fps | 1% low 142.3 fps | worst frame 8.3 ms | 2101 frames | draw distance 160 m
+highway: average 204.1 fps | 1% low 147.9 fps | worst frame 7.6 ms | 2042 frames | draw distance 160 m
+bus: average 222.2 fps | 1% low 149.5 fps | worst frame 7.8 ms | 2222 frames | draw distance 160 m
+building: average 201.1 fps | 1% low 135.2 fps | worst frame 8.1 ms | 2011 frames | draw distance 160 m

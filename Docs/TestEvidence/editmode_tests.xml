@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="26" result="Passed" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.1089291">
+  <test-suite type="TestSuite" id="1000" name="Golden Hour" fullname="Golden Hour" runstate="Runnable" testcasecount="26" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.108929" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="1032" name="GoldenHour.Tests.Editor.dll" fullname="C:/gdit/My project (3)/My project (2)/Library/ScriptAssemblies/GoldenHour.Tests.Editor.dll" runstate="Runnable" testcasecount="26" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.097505" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="26120" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="1033" name="GoldenHour" fullname="GoldenHour" runstate="Runnable" testcasecount="26" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.096642" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1034" name="Tests" fullname="GoldenHour.Tests" runstate="Runnable" testcasecount="26" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.096081" total="26" passed="26" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestFixture" id="1015" name="CasualtySimTests" fullname="GoldenHour.Tests.CasualtySimTests" classname="GoldenHour.Tests.CasualtySimTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.062908" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1019" name="AirwayOpeningDelaysDeathAndRecoveryPositionStabilises" fullname="GoldenHour.Tests.CasualtySimTests.AirwayOpeningDelaysDeathAndRecoveryPositionStabilises" methodname="AirwayOpeningDelaysDeathAndRecoveryPositionStabilises" classname="GoldenHour.Tests.CasualtySimTests" runstate="Runnable" seed="677371564" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.027568" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1020" name="CprNeverChangesOutcomeAndExpectantIsNotPreventable" fullname="GoldenHour.Tests.CasualtySimTests.CprNeverChangesOutcomeAndExpectantIsNotPreventable" methodname="CprNeverChangesOutcomeAndExpectantIsNotPreventable" classname="GoldenHour.Tests.CasualtySimTests" runstate="Runnable" seed="1874238705" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000709" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1021" name="DeterminismAndMeasuredRateRespectsThreshold" fullname="GoldenHour.Tests.CasualtySimTests.DeterminismAndMeasuredRateRespectsThreshold" methodname="DeterminismAndMeasuredRateRespectsThreshold" classname="GoldenHour.Tests.CasualtySimTests" runstate="Runnable" seed="1361797609" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.004647" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1016" name="HaemorrhageDeterioratesAndDiesUntreated" fullname="GoldenHour.Tests.CasualtySimTests.HaemorrhageDeterioratesAndDiesUntreated" methodname="HaemorrhageDeterioratesAndDiesUntreated" classname="GoldenHour.Tests.CasualtySimTests" runstate="Runnable" seed="863892472" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.004978" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1017" name="PressureDressingStabilises" fullname="GoldenHour.Tests.CasualtySimTests.PressureDressingStabilises" methodname="PressureDressingStabilises" classname="GoldenHour.Tests.CasualtySimTests" runstate="Runnable" seed="476405894" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000673" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1022" name="TransportStopsDeterioration" fullname="GoldenHour.Tests.CasualtySimTests.TransportStopsDeterioration" methodname="TransportStopsDeterioration" classname="GoldenHour.Tests.CasualtySimTests" runstate="Runnable" seed="418265464" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000474" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1018" name="YellowWorsensToRedUnlessStabilised" fullname="GoldenHour.Tests.CasualtySimTests.YellowWorsensToRedUnlessStabilised" methodname="YellowWorsensToRedUnlessStabilised" classname="GoldenHour.Tests.CasualtySimTests" runstate="Runnable" seed="1492582024" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000584" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+          </test-suite>
+          <test-suite type="TestFixture" id="1023" name="ScoringTests" fullname="GoldenHour.Tests.ScoringTests" classname="GoldenHour.Tests.ScoringTests" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.011392" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1030" name="AdaptiveDifficultyBands" fullname="GoldenHour.Tests.ScoringTests.AdaptiveDifficultyBands" methodname="AdaptiveDifficultyBands" classname="GoldenHour.Tests.ScoringTests" runstate="Runnable" seed="246130496" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000935" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1028" name="DispatchFields" fullname="GoldenHour.Tests.ScoringTests.DispatchFields" methodname="DispatchFields" classname="GoldenHour.Tests.ScoringTests" runstate="Runnable" seed="2110485322" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000417" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1024" name="FirstTagScores" fullname="GoldenHour.Tests.ScoringTests.FirstTagScores" methodname="FirstTagScores" classname="GoldenHour.Tests.ScoringTests" runstate="Runnable" seed="139674861" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000351" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1027" name="HandoverPriority" fullname="GoldenHour.Tests.ScoringTests.HandoverPriority" methodname="HandoverPriority" classname="GoldenHour.Tests.ScoringTests" runstate="Runnable" seed="1865297127" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.001015" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1031" name="ProfileUnlocksNextScenario" fullname="GoldenHour.Tests.ScoringTests.ProfileUnlocksNextScenario" methodname="ProfileUnlocksNextScenario" classname="GoldenHour.Tests.ScoringTests" runstate="Runnable" seed="1303706718" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.001382" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1026" name="RetagWithoutConditionChangeEarnsNothing" fullname="GoldenHour.Tests.ScoringTests.RetagWithoutConditionChangeEarnsNothing" methodname="RetagWithoutConditionChangeEarnsNothing" classname="GoldenHour.Tests.ScoringTests" runstate="Runnable" seed="1320984076" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.001462" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1025" name="TagNeedsExaminationAndRetagNeedsReexamination" fullname="GoldenHour.Tests.ScoringTests.TagNeedsExaminationAndRetagNeedsReexamination" methodname="TagNeedsExaminationAndRetagNeedsReexamination" classname="GoldenHour.Tests.ScoringTests" runstate="Runnable" seed="1313976073" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000765" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1029" name="TimeBonusStarsAndLedger" fullname="GoldenHour.Tests.ScoringTests.TimeBonusStarsAndLedger" methodname="TimeBonusStarsAndLedger" classname="GoldenHour.Tests.ScoringTests" runstate="Runnable" seed="2068311632" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.002544" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+          </test-suite>
+          <test-suite type="TestFixture" id="1001" name="StartTriageTests" fullname="GoldenHour.Tests.StartTriageTests" classname="GoldenHour.Tests.StartTriageTests" runstate="Runnable" testcasecount="11" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.019490" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1004" name="BreathingOnlyAfterAirwayOpeningIsRed" fullname="GoldenHour.Tests.StartTriageTests.BreathingOnlyAfterAirwayOpeningIsRed" methodname="BreathingOnlyAfterAirwayOpeningIsRed" classname="GoldenHour.Tests.StartTriageTests" runstate="Runnable" seed="158988116" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000740" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1012" name="CannotFollowCommandsIsRedOtherwiseYellow" fullname="GoldenHour.Tests.StartTriageTests.CannotFollowCommandsIsRedOtherwiseYellow" methodname="CannotFollowCommandsIsRedOtherwiseYellow" classname="GoldenHour.Tests.StartTriageTests" runstate="Runnable" seed="727103271" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000342" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-suite type="ParameterizedMethod" id="1011" name="CirculationThreshold" fullname="GoldenHour.Tests.StartTriageTests.CirculationThreshold" classname="GoldenHour.Tests.StartTriageTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.001546" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1008" name="CirculationThreshold(2.0f,True,Yellow)" fullname="GoldenHour.Tests.StartTriageTests.CirculationThreshold(2.0f,True,Yellow)" methodname="CirculationThreshold" classname="GoldenHour.Tests.StartTriageTests" runstate="Runnable" seed="617813626" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000408" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1009" name="CirculationThreshold(2.5f,True,Red)" fullname="GoldenHour.Tests.StartTriageTests.CirculationThreshold(2.5f,True,Red)" methodname="CirculationThreshold" classname="GoldenHour.Tests.StartTriageTests" runstate="Runnable" seed="1126592184" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000145" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1010" name="CirculationThreshold(1.5f,False,Red)" fullname="GoldenHour.Tests.StartTriageTests.CirculationThreshold(1.5f,False,Red)" methodname="CirculationThreshold" classname="GoldenHour.Tests.StartTriageTests" runstate="Runnable" seed="122536111" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000083" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-case id="1013" name="DeceasedIsBlack" fullname="GoldenHour.Tests.StartTriageTests.DeceasedIsBlack" methodname="DeceasedIsBlack" classname="GoldenHour.Tests.StartTriageTests" runstate="Runnable" seed="717407166" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000157" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1003" name="NoBreathingAfterAirwayIsBlack" fullname="GoldenHour.Tests.StartTriageTests.NoBreathingAfterAirwayIsBlack" methodname="NoBreathingAfterAirwayIsBlack" classname="GoldenHour.Tests.StartTriageTests" runstate="Runnable" seed="2042314000" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000161" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1014" name="PriorityOrder" fullname="GoldenHour.Tests.StartTriageTests.PriorityOrder" methodname="PriorityOrder" classname="GoldenHour.Tests.StartTriageTests" runstate="Runnable" seed="578545330" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000482" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-suite type="ParameterizedMethod" id="1007" name="RespiratoryRateThreshold" fullname="GoldenHour.Tests.StartTriageTests.RespiratoryRateThreshold" classname="GoldenHour.Tests.StartTriageTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.002556" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1005" name="RespiratoryRateThreshold(30,Yellow)" fullname="GoldenHour.Tests.StartTriageTests.RespiratoryRateThreshold(30,Yellow)" methodname="RespiratoryRateThreshold" classname="GoldenHour.Tests.StartTriageTests" runstate="Runnable" seed="1723447997" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000633" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1006" name="RespiratoryRateThreshold(31,Red)" fullname="GoldenHour.Tests.StartTriageTests.RespiratoryRateThreshold(31,Red)" methodname="RespiratoryRateThreshold" classname="GoldenHour.Tests.StartTriageTests" runstate="Runnable" seed="912863376" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000228" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-case id="1002" name="WalkingIsGreenEvenWithRedSigns" fullname="GoldenHour.Tests.StartTriageTests.WalkingIsGreenEvenWithRedSigns" methodname="WalkingIsGreenEvenWithRedSigns" classname="GoldenHour.Tests.StartTriageTests" runstate="Runnable" seed="1278671589" result="Passed" start-time="2026-11-07 08:55:56Z" end-time="2026-11-07 08:55:56Z" duration="0.000320" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[Saving results to: C:/Users/nithi/AppData/LocalLow/Golden Hour Learning/Golden Hour\TestResults.xml
+]]></output>
+            </test-case>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

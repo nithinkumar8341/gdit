@@ -25,3 +25,6 @@
 # OS files
 .DS_Store
 Thumbs.db
+
+# Release archives (M10) are not committed
+/[Rr]elease/

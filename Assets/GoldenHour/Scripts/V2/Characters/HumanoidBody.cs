@@ -132,6 +132,10 @@ namespace GoldenHour
                 if (accessory) part.gameObject.SetActive(AccessoryVisible(part.name, style));
                 Collider collider = part.GetComponent<Collider>();
                 if (collider != null) Destroy(collider);
+                bool detail = part.name.Contains("Nose") || part.name.Contains("Ear") || part.name.Contains("Hand") || part.name.Contains("Hair") ||
+                              part.name.Contains("Collar") || part.name.Contains("Stripe") || part.name.Contains("Peak") || part.name.Contains("Brim") ||
+                              part.name.Contains("Visor") || part.name.Contains("Shoulder") || part.name.Contains("Neck");
+                if (detail) part.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             }
 
             return true;

@@ -45,16 +45,19 @@ namespace GoldenHour
             Application.runInBackground = true;
             QualitySettings.vSyncCount = 0;
             Application.targetFrameRate = -1;
+            yield return null;
             Session.SeedOverride = 4242;
             Session.DifficultyOverride = Difficulty.Normal;
             ProfileStore.OverrideDirectory = Path.Combine(outputDirectory, "profile");
             Cutscene.Enabled = false;
+            bool capped = Array.IndexOf(Environment.GetCommandLineArgs(), "-goldenhour-capped") >= 0;
+            GraphicsApplier.Uncapped = !capped;
             Write("Golden Hour benchmark | " + DateTime.Now.ToString("u") + " | Unity " + Application.unityVersion);
             Write("GPU: " + SystemInfo.graphicsDeviceName + " (" + SystemInfo.graphicsDeviceType + ", " + SystemInfo.graphicsMemorySize + " MB)");
             Write("CPU: " + SystemInfo.processorType + " | RAM " + SystemInfo.systemMemorySize + " MB");
             yield return new WaitForSecondsRealtime(1f);
             Write("Resolution: " + Screen.width + "x" + Screen.height + " " + Screen.fullScreenMode + " | preset " + GameSettings.Graphics +
-                  " | vSync off, uncapped");
+                  " | " + (GraphicsApplier.Uncapped ? "vSync off, uncapped" : "vSync on, capped at 60 (as in normal play)"));
 
             foreach (string scenario in new[] { "tutorial", "highway", "bus", "building" })
             {

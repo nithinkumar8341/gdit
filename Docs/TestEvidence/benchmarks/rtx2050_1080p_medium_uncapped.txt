@@ -1,0 +1,8 @@
+Golden Hour benchmark | 2026-11-07 14:31:01Z | Unity 6000.6.2f1
+GPU: NVIDIA GeForce RTX 2050 (Direct3D11, 3965 MB)
+CPU: 12th Gen Intel(R) Core(TM) i5-12500H | RAM 16050 MB
+Resolution: 1920x1080 FullScreenWindow | preset Medium | vSync off, uncapped
+tutorial: average 373.3 fps | 1% low 213.9 fps | worst frame 5.3 ms | 3733 frames | draw distance 160 m
+highway: average 346.3 fps | 1% low 163.3 fps | worst frame 11.5 ms | 3464 frames | draw distance 160 m
+bus: average 329.4 fps | 1% low 186.8 fps | worst frame 8.5 ms | 3294 frames | draw distance 160 m
+building: average 315.5 fps | 1% low 175.0 fps | worst frame 6.8 ms | 3156 frames | draw distance 160 m

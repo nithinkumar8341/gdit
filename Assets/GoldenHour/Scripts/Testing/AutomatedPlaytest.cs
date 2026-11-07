@@ -155,6 +155,10 @@ namespace GoldenHour
             GameSettings.Graphics = GraphicsPreset.Medium;
             GraphicsApplier.Apply();
             Check("Graphics preset Medium applies render scale 0.9", Mathf.Approximately(GraphicsApplier.RenderScale, 0.9f));
+            UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset urp =
+                UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+            Check("Medium preset uses the integrated-graphics budget (30 m shadows, 1 cascade, no SSAO)",
+                urp != null && Mathf.Approximately(urp.shadowDistance, 30f) && urp.shadowCascadeCount == 1 && !GraphicsApplier.AmbientOcclusionActive);
             yield return Screenshot("03_settings");
 
             menu.ShowFeedback();

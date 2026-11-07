@@ -74,3 +74,16 @@
   - Run JSON, profile, campaign unlocks and adaptive difficulty were already in place from M1 and M2.
 - **M7 (UX and accessibility):** everything required was delivered during M2 and is verified by the autotest: live 3D menu, campaign, loading tips, credits, all settings (presets, resolution, rebinding, subtitles, colour-blind tags with shapes, stripes and numbers, text size, reduce motion, three volume sliders, sensitivity), gamepad (`GamepadSelector` plus gamepad bindings), and pause.
 - **Verification:** player autotest **256/256** checks pass, with 0 errors or exceptions logged. New checks cover the intro cutscene, music, hands, stress, photo mode, the CPR rate, the recovery minigame and the debrief tabs. One earlier run failed only the menu hover check: the scale measured exactly 1.020 against >1.02 after 0.2 s. That was a timing margin, not a defect; the test now waits 0.4 s.
+- **M8 (performance and QA):**
+  - **Medium preset:** render scale 0.9, a single shadow cascade, 30 m shadows, SSAO off. The SSAO renderer feature is toggled per preset; High keeps it.
+  - **Shadows:** small character parts no longer cast shadows.
+  - **Benchmark:** `PerformanceBenchmark` (`-goldenhour-benchmark <dir> [-goldenhour-preset X] [-goldenhour-capped]`) logs the GPU, average fps, 1% low and worst frame per scenario.
+  - **Integrated graphics (Intel Iris Xe), 1080p Medium:** a locked 60.0 fps with vSync (as played) in all four scenarios; 201–222 fps uncapped.
+    - The GPU was forced through the Windows per-app GPU preference, which was removed afterwards.
+    - The first capped run, before the preset changes, missed frames (averages of 47–56 fps and one 866 ms hitch).
+  - **Tests:**
+    - Autotest 257/257 checks pass, with 0 errors or exceptions.
+    - Edit-mode tests 26/26.
+    - 0 errors and 0 warnings in project code.
+    - Validate Project passed.
+  - **Documents:** TESTING_REPORT.md rewritten for v2. `Docs/TestEvidence` refreshed with the results, screenshots, test XML and benchmark files. Release/ is git-ignored.
