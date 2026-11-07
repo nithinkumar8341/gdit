@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
@@ -43,8 +44,32 @@ namespace GoldenHour
             runner.AddComponent<AutomatedPlaytest>().outputDirectory = Path.GetFullPath(args[index + 1]);
         }
 
-        private void OnEnable() => Application.logMessageReceived += OnLog;
-        private void OnDisable() => Application.logMessageReceived -= OnLog;
+        private bool finished;
+
+        private void OnEnable()
+        {
+            Application.logMessageReceived += OnLog;
+            Application.quitting += OnQuitting;
+        }
+
+        private void OnDisable()
+        {
+            Application.logMessageReceived -= OnLog;
+            Application.quitting -= OnQuitting;
+        }
+
+        /// <summary>
+        /// If the player is closed before the run finishes (window closed, session event), leave evidence instead of
+        /// silently producing no results file (audit finding: one start-up shutdown with no output).
+        /// </summary>
+        private void OnQuitting()
+        {
+            if (finished || string.IsNullOrEmpty(outputDirectory)) return;
+            lines.Add("INCOMPLETE: the player was asked to quit after " + checks + " checks (" + failures + " failed) at " +
+                      DateTime.Now.ToString("u") + ". This was not requested by the autotest.");
+            Directory.CreateDirectory(outputDirectory);
+            File.WriteAllLines(Path.Combine(outputDirectory, "autotest_results.txt"), lines);
+        }
 
         private void OnLog(string condition, string stackTrace, LogType type)
         {
@@ -56,8 +81,10 @@ namespace GoldenHour
         private IEnumerator Start()
         {
             Directory.CreateDirectory(outputDirectory);
+            Debug.Log("[Autotest] starting, output " + outputDirectory);
             Application.runInBackground = true;
             InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+            IsolateInput();
             savedVolume = GameSettings.Volume;
             savedSensitivity = GameSettings.MouseSensitivity;
             savedDifficulty = GameSettings.Difficulty;
@@ -89,10 +116,12 @@ namespace GoldenHour
             GameSettings.Subtitles = savedSubtitles;
             GameSettings.ColourblindTags = savedColourblind;
             GameInput.ResetBindings();
+            Check("Real keyboard, mouse and gamepads were isolated from the test run", RealDevicesEnabled() == 0, RealDevicesEnabled().ToString());
             Check("Zero errors or exceptions logged during the whole run", errorsLogged == 0,
                 errorsLogged + (errorSamples.Count > 0 ? " | " + string.Join(" || ", errorSamples) : string.Empty));
             Log(failures == 0 ? "RESULT: ALL " + checks + " CHECKS PASSED" : "RESULT: " + failures + " OF " + checks + " CHECK(S) FAILED");
             File.WriteAllLines(Path.Combine(outputDirectory, "autotest_results.txt"), lines);
+            finished = true;
             Application.Quit(failures == 0 ? 0 : 1);
         }
 
@@ -213,9 +242,45 @@ namespace GoldenHour
 
         // -------------------------------------------------------------- helpers
 
+        private static Keyboard testKeyboard;
+
+        /// <summary>
+        /// The autotest runs with input processed in the background, so real keys pressed in other windows used to reach
+        /// the player (Phase 1 finding: a stray Esc paused one run). The test now drives a virtual keyboard of its own and
+        /// disables every real keyboard, mouse, gamepad and joystick, including devices connected later.
+        /// </summary>
+        private static void IsolateInput()
+        {
+            testKeyboard = InputSystem.AddDevice<Keyboard>("Autotest Keyboard");
+            testKeyboard.MakeCurrent();
+            foreach (InputDevice device in InputSystem.devices.ToArray()) DisableIfReal(device);
+            InputSystem.onDeviceChange += (device, change) =>
+            {
+                if (change == InputDeviceChange.Added || change == InputDeviceChange.Reconnected) DisableIfReal(device);
+            };
+        }
+
+        private static void DisableIfReal(InputDevice device)
+        {
+            if (device == testKeyboard || !device.enabled) return;
+            if (device is Keyboard || device is Pointer || device is Gamepad || device is Joystick) InputSystem.DisableDevice(device);
+        }
+
+        /// <summary>Real input devices still enabled during the run (should be zero).</summary>
+        private static int RealDevicesEnabled()
+        {
+            int count = 0;
+            foreach (InputDevice device in InputSystem.devices)
+            {
+                if (device != testKeyboard && device.enabled && (device is Keyboard || device is Pointer || device is Gamepad || device is Joystick)) count++;
+            }
+
+            return count;
+        }
+
         private static IEnumerator HoldKey(Key key, float seconds)
         {
-            Keyboard keyboard = Keyboard.current ?? InputSystem.AddDevice<Keyboard>();
+            Keyboard keyboard = testKeyboard ?? Keyboard.current ?? InputSystem.AddDevice<Keyboard>();
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(key));
             yield return new WaitForSeconds(seconds);
             InputSystem.QueueStateEvent(keyboard, new KeyboardState());
@@ -225,7 +290,7 @@ namespace GoldenHour
 
         private static IEnumerator TapKey(Key key)
         {
-            Keyboard keyboard = Keyboard.current ?? InputSystem.AddDevice<Keyboard>();
+            Keyboard keyboard = testKeyboard ?? Keyboard.current ?? InputSystem.AddDevice<Keyboard>();
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(key));
             yield return null;
             yield return null;

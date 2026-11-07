@@ -46,6 +46,44 @@ namespace GoldenHour
         Reassure = 32
     }
 
+    /// <summary>Player-facing names for treatments (single values and combined flags).</summary>
+    public static class TreatmentNames
+    {
+        private static readonly Treatment[] Order =
+        {
+            Treatment.PressureDressing, Treatment.AirwayOpening, Treatment.RecoveryPosition, Treatment.Blanket, Treatment.Reassure, Treatment.Cpr
+        };
+
+        public static string Name(Treatment treatment)
+        {
+            switch (treatment)
+            {
+                case Treatment.PressureDressing: return "Pressure dressing";
+                case Treatment.AirwayOpening: return "Airway opened";
+                case Treatment.RecoveryPosition: return "Recovery position";
+                case Treatment.Blanket: return "Blanket";
+                case Treatment.Cpr: return "CPR";
+                case Treatment.Reassure: return "Reassurance";
+                default: return "None";
+            }
+        }
+
+        /// <summary>"Pressure dressing, Blanket" for combined flags; "None" when empty.</summary>
+        public static string Describe(Treatment treatments)
+        {
+            if (treatments == Treatment.None) return "None";
+            System.Text.StringBuilder text = new System.Text.StringBuilder();
+            foreach (Treatment single in Order)
+            {
+                if ((treatments & single) == 0) continue;
+                if (text.Length > 0) text.Append(", ");
+                text.Append(Name(single));
+            }
+
+            return text.ToString();
+        }
+    }
+
     public enum BodyVariant
     {
         Adult,

@@ -88,7 +88,7 @@ namespace GoldenHour
 
             body.Append("\n<b>TAG</b>  ").Append(casualty.Record.HasTag ? TriageTagVisual.UiLabel(casualty.Record.CurrentTag) : "not tagged");
             if (casualty.Record.HasTag && !casualty.Record.CanRetag) body.Append("  <size=85%><color=#CDD3D8>(re-examine to change)</color></size>");
-            if (casualty.Sim.Applied != Treatment.None) body.Append("\n<b>AID GIVEN</b>  ").Append(casualty.Sim.Applied.ToString());
+            if (casualty.Sim.Applied != Treatment.None) body.Append("\n<b>AID GIVEN</b>  ").Append(TreatmentNames.Describe(casualty.Sim.Applied));
             if (!GlovesOn) body.Append("\n<color=#FF8A8A>Gloves are OFF - hands-on checks and aid without gloves are penalised.</color>");
             if (HintsEnabled) body.Append("\n<size=85%><color=#F6D171>HINT (START): walking? -> breathing (open the airway if not) -> rate over 30? -> circulation (refill over 2 s / no radial pulse) -> follows commands?</color></size>");
 
@@ -147,7 +147,7 @@ namespace GoldenHour
                 case Treatment.Blanket: return "Blanket (" + Blankets + ")";
                 case Treatment.Cpr: return "CPR";
                 case Treatment.Reassure: return "Reassure";
-                default: return treatment.ToString();
+                default: return TreatmentNames.Name(treatment);
             }
         }
 
@@ -279,7 +279,7 @@ namespace GoldenHour
 
             if ((casualty.Sim.Applied & treatment) != 0)
             {
-                hud.SetStatus(treatment + " already given to " + casualty.Id + ".");
+                hud.SetStatus(TreatmentNames.Name(treatment) + " already given to " + casualty.Id + ".");
                 return;
             }
 
@@ -295,7 +295,7 @@ namespace GoldenHour
                 return;
             }
 
-            if (treatment != Treatment.Reassure) ApplyGlovePenalty(casualty, treatment.ToString());
+            if (treatment != Treatment.Reassure) ApplyGlovePenalty(casualty, TreatmentNames.Name(treatment).ToLowerInvariant());
             switch (treatment)
             {
                 case Treatment.PressureDressing:
@@ -342,7 +342,7 @@ namespace GoldenHour
                 }
             }
 
-            Log("treat", casualty.Id, treatment + " -> " + result + (indicated ? " (indicated)" : " (not indicated)"));
+            Log("treat", casualty.Id, TreatmentNames.Name(treatment) + " -> " + result + (indicated ? " (indicated)" : " (not indicated)"));
             casualty.ApplyRestPose();
             if (examTarget == casualty && modal.IsOpen) BuildExamPanel();
         }

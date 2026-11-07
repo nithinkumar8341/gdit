@@ -97,3 +97,20 @@
   - **Release:** `Release/GoldenHour_Windows.zip` (40.2 MB, 202 entries; includes README and ASSET_CREDITS). It contains no `BackUpThisFolder` folder and is git-ignored.
   - **Verification:** the zip was extracted to a clean folder and the full autotest was run from the extracted exe: **257/257 checks pass**, 0 errors or exceptions, exit code 0.
   - **v2 complete (M1–M10).**
+
+## Final improvement plan (AUDIT_FINAL.md, approved)
+
+- **Phase 1 (intent):**
+  - Fix the objectives that never ticked and add the hazard total (`IncidentDirector.cs`).
+  - Queue score toasts and keep them off modals; separate the tip panel from the radio panel (`IncidentHud.cs`).
+  - Add readable treatment names (`Core/Physiology.cs` TreatmentNames, used in the examination panel, debrief data and logs).
+  - Investigate the audit's start-up shutdown; add an autotest quit hook.
+- **Phase 1 (done):**
+  - **Objectives:** the aid objective is now "Give indicated aid (given/needed)": living casualties whose indicated care, excluding reassurance and CPR, is complete. Handover is now "Hand over by priority (sent/needed)": living stretcher cases not in the green zone and not BLACK. Both tick when complete. The hazard objective shows marked/total.
+  - **HUD:** toasts are queued (one every 0.3 s, snapped slots). While a modal is open they move to a column beside it that fits the 1600×900 reference canvas. The tip panel moved to y −150, clear of the radio panel.
+  - **Names:** readable treatment names (`TreatmentNames` in Core) are used in the examination panel, debrief data, telemetry and logs.
+  - **Start-up shutdown:** not reproducible (6/6 quick launches started; 2 full runs passed). No game code quits silently: the only `Application.Quit` calls are the menu Exit button, the autotest end and the benchmark end.
+    - Phase 1 found the probable cause: the autotest ran with `IgnoreFocus`, so real keys typed in other windows reached the player. One run was paused by a stray Pause input.
+    - The autotest now drives its own virtual keyboard, disables all real keyboard, mouse, gamepad and joystick devices, and writes an INCOMPLETE results file if the player is closed early.
+  - **Checks added (257 → 279):** hazard total, tip/radio separation, toast layout, handover and aid objectives per scenario, readable treatment names per scenario, input isolation. A unit test for treatment names was also added (26 → 27).
+  - **Results:** 0 compiler errors or warnings; unit tests 27/27; Validate Project passed; autotest 279/279.

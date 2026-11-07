@@ -99,7 +99,7 @@ namespace GoldenHour
             dangerBacking.GetComponent<Image>().color = new Color32(80, 10, 14, 220);
             dangerBacking.SetActive(false);
 
-            tipPanel = UiFactory.Panel(root.transform, "Tip", new Vector2(700f, 96f), new Vector2(0f, -220f), new Color32(120, 26, 32, 228));
+            tipPanel = UiFactory.Panel(root.transform, "Tip", new Vector2(700f, 96f), new Vector2(0f, -150f), new Color32(120, 26, 32, 228));
             tipPanel.GetComponent<Image>().raycastTarget = false;
             tip = UiFactory.Text(tipPanel.transform, string.Empty, 18, new Vector2(670f, 90f), Vector2.zero, TextAlignmentOptions.Center);
             tipPanel.SetActive(false);
@@ -147,8 +147,25 @@ namespace GoldenHour
             }
 
             toasts.Clear();
+            pendingToasts.Clear();
         }
         public void SetObjectives(string text) => objectives.text = text;
+        public string ObjectivesText => objectives.text;
+
+        /// <summary>Canvas-space rectangles of the tip and radio panels (tests: overlap check).</summary>
+        public Rect TipRect => CanvasRect(tipPanel);
+        public Rect RadioRect => CanvasRect(radioPanel);
+
+        private Rect CanvasRect(GameObject panel)
+        {
+            RectTransform rect = (RectTransform)panel.transform;
+            RectTransform parent = (RectTransform)root.transform;
+            Vector3[] corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            Vector2 min = parent.InverseTransformPoint(corners[0]);
+            Vector2 max = parent.InverseTransformPoint(corners[2]);
+            return Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+        }
         public void SetClock(string text) => clock.text = text;
         public void SetSupplies(string text) => supplies.text = text;
 
@@ -203,21 +220,60 @@ namespace GoldenHour
             progressFill.anchorMax = new Vector2(Mathf.Clamp01(progress01), 1f);
         }
 
+        public const float ToastInterval = 0.3f;
+        public const float ToastSeconds = 2.6f;
+        private readonly Queue<(int points, string reason)> pendingToasts = new Queue<(int, string)>();
+        private float nextToastTime;
+
+        /// <summary>Set by the director each frame: while a modal is open, toasts move to the right-hand column.</summary>
+        public bool ModalOpen { get; set; }
+
+        /// <summary>Toasts on screen plus queued ones (tests).</summary>
+        public int ToastCount => toasts.Count + pendingToasts.Count;
+
+        /// <summary>Screen rectangles (canvas units) of the visible toasts (tests: overlap and modal checks).</summary>
+        public List<Rect> ToastRects()
+        {
+            List<Rect> rects = new List<Rect>();
+            foreach ((TMP_Text text, float end) toast in toasts)
+            {
+                if (toast.text == null) continue;
+                RectTransform rect = toast.text.rectTransform;
+                Vector2 size = rect.sizeDelta;
+                rects.Add(new Rect(rect.anchoredPosition - size * 0.5f, size));
+            }
+
+            return rects;
+        }
+
+        /// <summary>Queues a score message; one appears every <see cref="ToastInterval"/> seconds so they never stack.</summary>
         public void Toast(int points, string reason)
+        {
+            pendingToasts.Enqueue((points, reason));
+        }
+
+        private void SpawnToast(int points, string reason)
         {
             Color color = points >= 0 ? new Color32(127, 224, 166, 255) : new Color32(255, 138, 138, 255);
             TMP_Text text = UiFactory.Text(toastRoot, (points >= 0 ? "+" : "") + points + "  " + reason, 20, new Vector2(700f, 34f),
-                new Vector2(0f, 60f), TextAlignmentOptions.Center, color);
+                ToastSlot(0), TextAlignmentOptions.Center, color);
             text.fontStyle = FontStyles.Bold;
             text.outlineWidth = 0.18f;
             text.outlineColor = new Color32(10, 14, 18, 255);
+            text.enableAutoSizing = true;
+            text.fontSizeMin = 13f;
+            text.fontSizeMax = 20f;
             if (toasts.Count >= 5)
             {
                 if (toasts[0].text != null) Object.Destroy(toasts[0].text.gameObject);
                 toasts.RemoveAt(0);
             }
-            toasts.Add((text, Time.time + 2.6f));
+
+            toasts.Add((text, Time.time + ToastSeconds));
         }
+
+        /// <summary>Normal play: centred above the prompt. Modal open: a right-hand column beside the panel.</summary>
+        private Vector2 ToastSlot(int slot) => ModalOpen ? new Vector2(711f, 150f - slot * 72f) : new Vector2(0f, 60f + slot * 34f);
 
         public void SetCompass(bool visible, float angle, string label)
         {
@@ -239,14 +295,21 @@ namespace GoldenHour
                 tipPanel.SetActive(false);
             }
 
+            if (pendingToasts.Count > 0 && Time.unscaledTime >= nextToastTime)
+            {
+                (int points, string reason) next = pendingToasts.Dequeue();
+                SpawnToast(next.points, next.reason);
+                nextToastTime = Time.unscaledTime + ToastInterval;
+            }
+
             for (int i = toasts.Count - 1; i >= 0; i--)
             {
                 if (toasts[i].text == null) continue;
                 RectTransform rect = toasts[i].text.rectTransform;
-                float slot = 60f + (toasts.Count - 1 - i) * 34f;
-                float age = Mathf.Clamp01(1f - (toasts[i].end - Time.time) / 2.6f);
-                Vector2 target = new Vector2(0f, slot + age * 12f);
-                rect.anchoredPosition = Vector2.Lerp(rect.anchoredPosition, target, Mathf.Clamp01(Time.unscaledDeltaTime * 12f));
+                rect.sizeDelta = ModalOpen ? new Vector2(170f, 66f) : new Vector2(700f, 34f);
+                toasts[i].text.fontSizeMax = ModalOpen ? 15f : 20f;
+                toasts[i].text.alignment = ModalOpen ? TextAlignmentOptions.Right : TextAlignmentOptions.Center;
+                rect.anchoredPosition = ToastSlot(toasts.Count - 1 - i);
                 if (Time.time > toasts[i].end)
                 {
                     Object.Destroy(toasts[i].text.gameObject);

@@ -290,6 +290,7 @@ namespace GoldenHour
         private void Update()
         {
             if (hud == null) return;
+            hud.ModalOpen = modal.IsOpen && Phase != IncidentPhase.Debrief;
             hud.Tick();
             UpdateAction();
             bool minigameWasActive = FirstAidMinigame.Active;
@@ -875,7 +876,7 @@ namespace GoldenHour
                     outcome = OutcomeText(casualty),
                     decisionMinutes = casualty.Record.DecisionMinutes,
                     retags = casualty.Record.Retags,
-                    treatments = sim.Applied.ToString()
+                    treatments = TreatmentNames.Describe(sim.Applied)
                 };
                 outcome.history.AddRange(casualty.Record.Log);
                 foreach (SimEvent simEvent in sim.Events) outcome.history.Add(simEvent.minute.ToString("0.0") + " min: " + simEvent.text);
@@ -967,19 +968,21 @@ namespace GoldenHour
             if (Phase == IncidentPhase.Safety)
             {
                 objectives.Append(Check(KitCollected)).Append("Collect the first-aid bag\n");
-                objectives.Append(Check(marked == hazards.Count)).Append("Spot and mark hazards (").Append(marked).Append(")\n");
+                objectives.Append(Check(marked == hazards.Count)).Append("Spot and mark hazards (").Append(marked).Append("/").Append(hazards.Count).Append(")\n");
                 objectives.Append(Check(Dispatched)).Append("Radio the dispatch report to 112 (").Append(GameInput.KeyName(GameInput.Radio)).Append(")\n");
                 objectives.Append(Check(GlovesOn)).Append("Put on gloves (").Append(GameInput.KeyName(GameInput.Gloves)).Append(")");
             }
             else
             {
                 int tagged = casualties.FindAll(c => c.Record.HasTag).Count;
-                int transported = casualties.FindAll(c => c.Sim.Transported).Count;
                 int dead = casualties.FindAll(c => c.Sim.State.deceased).Count;
                 objectives.Append(Check(shoutCredited)).Append("Shout for the walking wounded (").Append(GameInput.KeyName(GameInput.Shout)).Append(")\n");
                 objectives.Append(Check(tagged == casualties.Count)).Append("Examine and tag everyone (").Append(tagged).Append("/").Append(casualties.Count).Append(")\n");
-                objectives.Append(Check(false)).Append("Give indicated aid; re-check people over time\n");
-                objectives.Append(Check(false)).Append("Hand over to ambulances by priority (").Append(transported).Append(" sent)");
+                AidProgress(out int aidGiven, out int aidNeeded);
+                HandoverProgress(out int handed, out int toHand);
+                objectives.Append(Check(aidNeeded > 0 && aidGiven == aidNeeded)).Append("Give indicated aid (").Append(aidGiven).Append("/").Append(aidNeeded)
+                    .Append("); re-check people\n");
+                objectives.Append(Check(toHand > 0 && handed == toHand)).Append("Hand over by priority (").Append(handed).Append("/").Append(toHand).Append(" sent)");
                 if (dead > 0) objectives.Append("\n<color=#FF8A8A>Deaths: ").Append(dead).Append("</color>");
             }
 
@@ -994,6 +997,40 @@ namespace GoldenHour
                   "Pressure dressings  " + Dressings + "\nBlankets  " + Blankets
                 : "<b>BAG</b>  not collected\n<size=85%>Find the red first-aid bag</size>");
         }
+
+        /// <summary>The care a casualty needs from the player: indicated treatments except reassurance and CPR.</summary>
+        public static Treatment CareNeeded(Casualty casualty) =>
+            casualty.Profile.indicatedTreatments & ~(Treatment.Reassure | Treatment.Cpr);
+
+        /// <summary>Living casualties who need care, and how many have received all of it.</summary>
+        public void AidProgress(out int given, out int needed)
+        {
+            given = 0;
+            needed = 0;
+            foreach (Casualty casualty in casualties)
+            {
+                Treatment care = CareNeeded(casualty);
+                if (care == Treatment.None || casualty.Sim.State.deceased) continue;
+                needed++;
+                if ((casualty.Sim.Applied & care) == care) given++;
+            }
+        }
+
+        /// <summary>Stretcher cases (alive, not in the green zone, not expectant) and how many have been transported.</summary>
+        public void HandoverProgress(out int handed, out int needed)
+        {
+            handed = 0;
+            needed = 0;
+            foreach (Casualty casualty in casualties)
+            {
+                if (casualty.Sim.State.deceased && !casualty.Sim.Transported) continue;
+                if (casualty.InGreenZone || casualty.Record.CurrentTag == TriageTag.Black) continue;
+                needed++;
+                if (casualty.Sim.Transported) handed++;
+            }
+        }
+
+        public string ObjectivesText => hud != null ? hud.ObjectivesText : string.Empty;
 
         private static string Check(bool done) => done ? "<color=#7FE0A6>[X]</color> " : "[  ] ";
     }

@@ -357,5 +357,17 @@ namespace GoldenHour.Tests
             PlayerProfileData loaded = JsonUtility.FromJson<PlayerProfileData>(json);
             Assert.AreEqual(500, loaded.Get("tutorial").bestScore);
         }
-    }
+
+        [Test]
+        public void TreatmentNamesAreReadable()
+        {
+            Assert.AreEqual("None", TreatmentNames.Describe(Treatment.None));
+            Assert.AreEqual("Pressure dressing", TreatmentNames.Describe(Treatment.PressureDressing));
+            Assert.AreEqual("Airway opened, Recovery position", TreatmentNames.Describe(Treatment.RecoveryPosition | Treatment.AirwayOpening));
+            Assert.AreEqual("Pressure dressing, Blanket, Reassurance", TreatmentNames.Describe(Treatment.Reassure | Treatment.Blanket | Treatment.PressureDressing));
+            foreach (Treatment single in new[] { Treatment.PressureDressing, Treatment.AirwayOpening, Treatment.RecoveryPosition, Treatment.Blanket, Treatment.Cpr, Treatment.Reassure })
+            {
+                StringAssert.DoesNotMatch("[a-z][A-Z]", TreatmentNames.Name(single), "no CamelCase identifiers in player-facing names");
+            }
+        }    }
 }

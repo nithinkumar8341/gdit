@@ -52,6 +52,15 @@ namespace GoldenHour
             yield return new WaitForSeconds(0.6f);
             Check(id + ": golden-hour clock runs in real time", d.Minute > startMinute, d.Minute.ToString("0.000"));
             yield return Screenshot(id + "_02_scene");
+            Check(id + ": hazard objective shows marked / total", d.ObjectivesText.Contains("(0/" + d.Hazards.Count + ")"), d.ObjectivesText);
+            if (id == "highway")
+            {
+                d.Hud.ShowRadio("Layout check", 3f);
+                yield return null;
+                Check("highway: tip panel and radio panel do not overlap", d.Hud.TipVisible && !d.Hud.TipRect.Overlaps(d.Hud.RadioRect),
+                    d.Hud.TipRect + " vs " + d.Hud.RadioRect);
+            }
+
             GoldenHourAudio sound = d.GetComponent<GoldenHourAudio>();
             Check(id + ": layered music and weather ambience play", sound != null && sound.MusicPlaying);
             Check(id + ": first-person hands are visible", Viewmodel.Instance != null && Viewmodel.Instance.HandsShown);
@@ -156,6 +165,19 @@ namespace GoldenHour
                     screenshotTaken = true;
                     d.OpenExamination(casualty);
                     yield return null;
+                    d.Hud.Toast(0, "Layout check A");
+                    d.Hud.Toast(0, "Layout check B");
+                    yield return new WaitForSecondsRealtime(1.2f);
+                    List<Rect> toastRects = d.Hud.ToastRects();
+                    bool apart = toastRects.Count >= 2;
+                    for (int a = 0; a < toastRects.Count; a++)
+                    {
+                        if (toastRects[a].xMin < 622f || toastRects[a].xMax > 800f) apart = false;
+                        for (int b = a + 1; b < toastRects.Count; b++) apart &= !toastRects[a].Overlaps(toastRects[b]);
+                    }
+
+                    Check(id + ": score messages are queued, never overlap and stay off the examination panel", apart,
+                        toastRects.Count + " visible: " + string.Join(" ", toastRects.ConvertAll(r => r.ToString("0"))));
                     yield return Screenshot(id + "_06_examination");
                 }
 
@@ -211,6 +233,9 @@ namespace GoldenHour
                                                                                   run.casualties.Count == d.Casualties.Count && run.path.Count > 0 &&
                                                                                   run.events.Exists(e => e.type == "tag"));
             Check(id + ": 1-3 stars awarded", run.stars >= 1 && run.stars <= 3, run.score + "/" + run.maximumScore + " = " + run.stars + " stars");
+            Check(id + ": treatments use readable names in the debrief data (no enum identifiers)",
+                run.casualties.TrueForAll(c => !System.Text.RegularExpressions.Regex.IsMatch(c.treatments ?? string.Empty, "[a-z][A-Z]")) &&
+                run.casualties.Exists(c => (c.treatments ?? string.Empty).Contains(" ") || c.treatments == "Blanket" || c.treatments == "Reassurance"));
             Check(id + ": debrief shown with feedback and disclaimer", d.Phase == IncidentPhase.Debrief && run.feedback.Count > 0 &&
                                                                      ScreenTextContains("NOT been medically reviewed"));
             yield return DebriefChecks(d, id);
@@ -577,6 +602,16 @@ namespace GoldenHour
             }
 
             Check(id + ": every surviving stretcher case was handed over", unresolved.Length == 0, unresolved + " waves " + scenario.waves.Count);
+            d.HandoverProgress(out int handed, out int toHand);
+            d.AidProgress(out int aidGiven, out int aidNeeded);
+            string objectivesText = d.ObjectivesText;
+            Check(id + ": handover objective ticks when every stretcher case is sent", handed == toHand && toHand > 0 &&
+                                                                                        objectivesText.Contains("[X]</color> Hand over by priority (" + handed + "/" + toHand),
+                handed + "/" + toHand);
+            bool aidTicked = objectivesText.Contains("[X]</color> Give indicated aid (" + aidGiven + "/" + aidNeeded + ")");
+            bool aidListed = objectivesText.Contains("Give indicated aid (" + aidGiven + "/" + aidNeeded + ")");
+            Check(id + ": aid objective counts casualties whose indicated care is complete and ticks only when all are done",
+                aidListed && aidTicked == (aidGiven == aidNeeded && aidNeeded > 0), aidGiven + "/" + aidNeeded);
         }
 
         // ------------------------------------------------------------- debrief

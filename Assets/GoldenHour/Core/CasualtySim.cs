@@ -152,7 +152,7 @@ namespace GoldenHour
             }
 
             Applied |= treatment;
-            Log(SimEventKind.Treated, treatment + " applied.");
+            Log(SimEventKind.Treated, TreatmentNames.Name(treatment) + " applied.");
             if (!wasStable && Stabilised) Log(SimEventKind.Stabilised, "Stabilised - deterioration stopped.");
             return TreatmentResult.Effective;
         }
