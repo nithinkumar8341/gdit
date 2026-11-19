@@ -51,6 +51,55 @@ namespace GoldenHour
         public float Speed { get; private set; }
         public bool Gliding => glideProgress >= 0f;
 
+        // ------------------------------------------------------------- third-person view
+
+        public const string ThirdPersonKey = "GoldenHour.ThirdPerson";
+
+        /// <summary>Over-the-shoulder camera offset from the eye (right, up, back), rotated by the view pitch.</summary>
+        public static readonly Vector3 ThirdPersonOffset = new Vector3(0.45f, 0.2f, -2.6f);
+
+        /// <summary>Tests set this to choose the view without touching the saved preference.</summary>
+        public static bool? ViewOverride { get; set; }
+
+        /// <summary>Saved choice (default on): see the whole character from behind; V / left shoulder toggles.</summary>
+        public static bool ThirdPersonPreferred
+        {
+            get => ViewOverride ?? PlayerPrefs.GetInt(ThirdPersonKey, 1) == 1;
+            set
+            {
+                if (ViewOverride.HasValue)
+                {
+                    ViewOverride = value;
+                    return;
+                }
+
+                PlayerPrefs.SetInt(ThirdPersonKey, value ? 1 : 0);
+                PlayerPrefs.Save();
+            }
+        }
+
+        private PlayerAvatar avatar;
+        private float thirdPersonBlend;
+
+        /// <summary>
+        /// Third person while moving around; examination, minigames and their camera glides stay first person (the
+        /// player kneels at the casualty), and without the character model the view is always first person.
+        /// </summary>
+        public bool ThirdPersonActive
+        {
+            get
+            {
+                if (avatar == null) avatar = GetComponent<PlayerAvatar>();
+                return ThirdPersonPreferred && !ForcedKneel && !Gliding && avatar != null && avatar.Built;
+            }
+        }
+
+        /// <summary>0 = first person, 1 = fully behind the character.</summary>
+        public float ThirdPersonBlend => thirdPersonBlend;
+
+        /// <summary>World position of the character's eyes (interaction rays start here, not at the orbit camera).</summary>
+        public Vector3 EyePosition => transform.position + Vector3.up * eyeHeight;
+
         private void Awake()
         {
             GameInput.Ensure();
@@ -187,6 +236,7 @@ namespace GoldenHour
                     SetPitch(pitch - look.y);
                 }
 
+                if (GameInput.Pressed(GameInput.ToggleView)) ThirdPersonPreferred = !ThirdPersonPreferred;
                 movementInput = Vector2.ClampMagnitude(GameInput.Move.ReadValue<Vector2>(), 1f);
                 sprint = GameInput.Held(GameInput.Sprint);
                 if (GameInput.Pressed(GameInput.Crouch)) kneelToggle = !kneelToggle;
@@ -220,7 +270,32 @@ namespace GoldenHour
                 sway = Mathf.Sin(bobPhase) * 0.012f;
             }
 
-            cameraTransform.localPosition = new Vector3(sway, eyeHeight + bob, 0f);
+            thirdPersonBlend = Mathf.MoveTowards(thirdPersonBlend, ThirdPersonActive ? 1f : 0f, Time.unscaledDeltaTime * 5f);
+            Vector3 eye = new Vector3(sway * (1f - thirdPersonBlend), eyeHeight + bob * (1f - thirdPersonBlend), 0f);
+            if (thirdPersonBlend <= 0.001f)
+            {
+                cameraTransform.localPosition = eye;
+                return;
+            }
+
+            // Orbit behind the shoulder with the view pitch, pulled in when a wall or vehicle is in the way.
+            Vector3 offset = Quaternion.Euler(pitch, 0f, 0f) * ThirdPersonOffset * thirdPersonBlend;
+            Vector3 from = transform.TransformPoint(eye);
+            Vector3 to = transform.TransformPoint(eye + offset);
+            float fraction = 1f;
+            Vector3 direction = to - from;
+            float length = direction.magnitude;
+            if (length > 0.01f)
+            {
+                foreach (RaycastHit hit in Physics.SphereCastAll(from, 0.2f, direction / length, length, Physics.DefaultRaycastLayers,
+                             QueryTriggerInteraction.Ignore))
+                {
+                    if (hit.collider.transform.IsChildOf(transform) || hit.collider.GetComponentInParent<Casualty>() != null) continue;
+                    fraction = Mathf.Min(fraction, Mathf.Max(0.15f, (hit.distance - 0.05f) / length));
+                }
+            }
+
+            cameraTransform.localPosition = eye + offset * fraction;
         }
 
         private void TrackStride(Vector3 before, bool sprint)

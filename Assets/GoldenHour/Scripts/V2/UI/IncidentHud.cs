@@ -133,7 +133,7 @@ namespace GoldenHour
             return "WASD move  |  " + GameInput.KeyName(GameInput.Interact) + " interact  |  " + GameInput.KeyName(GameInput.Radio) +
                    " radio  |  " + GameInput.KeyName(GameInput.Shout) + " shout  |  " + GameInput.KeyName(GameInput.Gloves) +
                    " gloves  |  " + GameInput.KeyName(GameInput.Tablet) + " tablet  |  " + GameInput.KeyName(GameInput.Crouch) +
-                   " kneel  |  Esc pause";
+                   " kneel  |  " + GameInput.KeyName(GameInput.ToggleView) + " view  |  Esc pause";
         }
 
         public void SetVisible(bool visible) => root.SetActive(visible);

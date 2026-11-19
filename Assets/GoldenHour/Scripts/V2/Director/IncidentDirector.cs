@@ -489,7 +489,12 @@ namespace GoldenHour
         private IInteractable FindTarget()
         {
             if (playerCamera == null) return null;
-            Ray ray = new Ray(playerCamera.position, playerCamera.forward);
+            // Aim along the camera (crosshair), but measure the reach from the character's eyes so the
+            // third-person orbit camera does not shorten the interaction range.
+            Vector3 aim = playerCamera.forward;
+            Vector3 start = playerCamera.position;
+            if (player != null) start += aim * Mathf.Max(0f, Vector3.Dot(player.EyePosition - start, aim));
+            Ray ray = new Ray(start, aim);
             RaycastHit[] hits = Physics.SphereCastAll(ray, 0.12f, InteractionRange, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
             Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
             foreach (RaycastHit hit in hits)

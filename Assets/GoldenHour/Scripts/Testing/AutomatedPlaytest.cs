@@ -82,6 +82,8 @@ namespace GoldenHour
         {
             Directory.CreateDirectory(outputDirectory);
             Debug.Log("[Autotest] starting, output " + outputDirectory);
+            // The scenario checks run in first person (exam framing, hands); the third-person character is tested on its own.
+            FirstPersonPlayer.ViewOverride = false;
             Application.runInBackground = true;
             InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
             IsolateInput();

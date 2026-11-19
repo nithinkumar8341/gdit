@@ -200,14 +200,30 @@ namespace GoldenHour
             }
         }
 
+        private bool requestedVisible = true;
+        private FirstPersonPlayer owner;
+
         public void SetVisible(bool visible)
         {
-            if (root != null) root.gameObject.SetActive(visible);
+            requestedVisible = visible;
+            if (root != null) root.gameObject.SetActive(visible && !InThirdPerson);
+        }
+
+        /// <summary>First-person hands are hidden while the camera is behind the full character.</summary>
+        private bool InThirdPerson
+        {
+            get
+            {
+                if (owner == null) owner = GetComponentInParent<FirstPersonPlayer>();
+                return owner != null && owner.ThirdPersonBlend > 0.5f;
+            }
         }
 
         private void LateUpdate()
         {
             if (root == null) return;
+            bool show = requestedVisible && !InThirdPerson;
+            if (root.gameObject.activeSelf != show) root.gameObject.SetActive(show);
             float dt = Mathf.Max(Time.unscaledDeltaTime, 0.0001f);
             Vector3 velocity = (transform.position - lastPosition) / dt;
             lastPosition = transform.position;

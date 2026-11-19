@@ -26,6 +26,7 @@ namespace GoldenHour
         public static InputAction Shout { get; private set; }
         public static InputAction Gloves { get; private set; }
         public static InputAction PhotoMode { get; private set; }
+        public static InputAction ToggleView { get; private set; }
         public static InputAction Primary { get; private set; }
         public static InputAction Rotate { get; private set; }
         public static InputAction Rise { get; private set; }
@@ -65,6 +66,7 @@ namespace GoldenHour
             Shout = Button(map, "Shout to Walking Wounded", "<Keyboard>/q", "<Gamepad>/dpad/left");
             Gloves = Button(map, "Put On Gloves", "<Keyboard>/g", "<Gamepad>/dpad/right");
             PhotoMode = Button(map, "Photo Mode", "<Keyboard>/f10", "<Gamepad>/rightStickPress");
+            ToggleView = Button(map, "Toggle 1st / 3rd Person", "<Keyboard>/v", "<Gamepad>/leftShoulder");
             Primary = Button(map, "Hold / Compress", "<Keyboard>/space", "<Gamepad>/rightTrigger");
             Primary.AddBinding("<Mouse>/leftButton");
 

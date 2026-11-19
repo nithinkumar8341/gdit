@@ -5,6 +5,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 
 namespace GoldenHour
 {
@@ -806,11 +807,61 @@ namespace GoldenHour
             Check(id + ": debrief shows the event timeline and decision times", ScreenTextContains("min") && ScreenTextContains("Decision time"));
         }
 
+        // ------------------------------------------------- third-person character
+
+        /// <summary>
+        /// The full skinned main character in third person: visible from behind, runs with W + Shift, walks with W, idles,
+        /// and V switches back to first person (body then only casts a shadow; gloved hands return).
+        /// </summary>
+        private IEnumerator ThirdPersonCharacter(FirstPersonPlayer player)
+        {
+            PlayerAvatar avatar = player.GetComponent<PlayerAvatar>();
+            Vector3 start = player.transform.position;
+            float yaw = player.transform.eulerAngles.y;
+            FirstPersonPlayer.ViewOverride = true;
+            yield return new WaitForSeconds(0.5f);
+            Camera view = player.PlayerCamera;
+            Vector3 chest = player.transform.position + Vector3.up * 1.2f;
+            Vector3 onScreen = view.WorldToViewportPoint(chest);
+            float cameraBack = Vector3.Distance(view.transform.position, player.EyePosition);
+            Check("tutorial: third person shows the full 3D main character (skinned Blender model with Idle/Walk/Run/Kneel)",
+                avatar != null && avatar.Built && avatar.BodyVisible && avatar.ClipCount >= 4 && avatar.Skin != null &&
+                avatar.Skin.sharedMesh.vertexCount > 2000 && cameraBack > 1.5f &&
+                onScreen.z > 0f && onScreen.x > 0.25f && onScreen.x < 0.75f && onScreen.y > 0.1f && onScreen.y < 0.9f,
+                "camera " + cameraBack.ToString("0.00") + " m behind the eyes, chest at viewport " + onScreen.ToString("0.00"));
+            yield return Screenshot("tutorial_01a_third_person_idle");
+
+            Keyboard keyboard = testKeyboard ?? Keyboard.current;
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W, Key.LeftShift));
+            yield return new WaitForSeconds(0.9f);
+            bool running = avatar != null && avatar.Playing("Run") && player.Speed > PlayerAvatar.RunThreshold;
+            string runDetail = (avatar != null ? avatar.CurrentClip : "none") + " at " + player.Speed.ToString("0.0") + " m/s";
+            yield return Screenshot("tutorial_01b_third_person_run");
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W));
+            yield return new WaitForSeconds(0.7f);
+            bool walking = avatar != null && avatar.Playing("Walk") && player.Speed > PlayerAvatar.WalkThreshold && player.Speed <= PlayerAvatar.RunThreshold;
+            string walkDetail = (avatar != null ? avatar.CurrentClip : "none") + " at " + player.Speed.ToString("0.0") + " m/s";
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+            yield return new WaitForSeconds(0.6f);
+            bool idle = avatar != null && avatar.Playing("Idle");
+            Check("tutorial: the character runs (W + Shift), walks (W) and idles with matching animations",
+                running && walking && idle, "run: " + runDetail + "; walk: " + walkDetail + "; idle: " + (avatar != null ? avatar.CurrentClip : "none"));
+
+            yield return TapKey(Key.V);
+            yield return new WaitForSeconds(0.5f);
+            Check("tutorial: V switches to first person (body casts a shadow only, gloved-hand viewmodel shown)",
+                !FirstPersonPlayer.ThirdPersonPreferred && avatar != null && !avatar.BodyVisible && Viewmodel.Instance != null &&
+                Viewmodel.Instance.HandsShown && Vector3.Distance(view.transform.position, player.EyePosition) < 0.2f);
+            player.Teleport(start, yaw, 0f);
+            yield return null;
+        }
+
         // ------------------------------------------------------- tutorial input
 
         private IEnumerator TutorialRealInput(IncidentDirector d)
         {
             FirstPersonPlayer player = FindAnyObjectByType<FirstPersonPlayer>();
+            yield return ThirdPersonCharacter(player);
             GoldenHourAudio audio = FindAnyObjectByType<GoldenHourAudio>();
             int steps = audio != null ? audio.FootstepsPlayed : 0;
             Vector3 before = player.transform.position;

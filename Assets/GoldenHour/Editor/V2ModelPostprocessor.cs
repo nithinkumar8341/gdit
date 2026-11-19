@@ -49,6 +49,18 @@ namespace GoldenHour.EditorTools
         private void OnPreprocessModel()
         {
             if (!assetPath.Replace('\\', '/').Contains("GoldenHour/Blender/Exports/")) return;
+            if (Path.GetFileNameWithoutExtension(assetPath) == "PlayerCharacter")
+            {
+                // Skinned, animated main character: axis conversion baked, legacy clips driven by PlayerAvatar.
+                ModelImporter character = (ModelImporter)assetImporter;
+                character.bakeAxisConversion = true;
+                character.globalScale = 1f;
+                character.animationType = ModelImporterAnimationType.Legacy;
+                character.importAnimation = true;
+                character.importCameras = false;
+                character.importLights = false;
+                return;
+            }
             if (System.Array.IndexOf(Models, Path.GetFileNameWithoutExtension(assetPath)) < 0) return;
             ModelImporter importer = (ModelImporter)assetImporter;
             importer.bakeAxisConversion = true;

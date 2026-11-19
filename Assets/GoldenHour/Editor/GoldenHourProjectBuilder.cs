@@ -154,6 +154,7 @@ namespace GoldenHour.EditorTools
             }
 
             ValidateTreatmentModels();
+            ValidatePlayerCharacter();
 
             foreach (string clip in AudioClips) LoadClip(clip + ".wav");
 
@@ -162,6 +163,8 @@ namespace GoldenHour.EditorTools
             IncidentDirector director = UnityEngine.Object.FindAnyObjectByType<IncidentDirector>();
             Require(director != null, "IncidentDirector is missing from the gameplay scene.");
             Require(director.treatmentPropsPrefab != null, "IncidentDirector needs the TreatmentProps model.");
+            PlayerAvatar sceneAvatar = UnityEngine.Object.FindAnyObjectByType<PlayerAvatar>();
+            Require(sceneAvatar != null && sceneAvatar.model != null, "The Player needs a PlayerAvatar with the PlayerCharacter model.");
             Viewmodel sceneViewmodel = UnityEngine.Object.FindAnyObjectByType<Viewmodel>();
             Require(sceneViewmodel != null && sceneViewmodel.handsModel != null, "The player camera's Viewmodel needs the FirstPersonHands model.");
             Require(director.catalog == catalog && director.baseMaterial != null && director.unlitMaterial != null && director.kitPrefab != null &&
@@ -481,6 +484,10 @@ namespace GoldenHour.EditorTools
             if (viewmodel == null) viewmodel = camera.gameObject.AddComponent<Viewmodel>();
             viewmodel.handsModel = OptionalModel("FirstPersonHands");
             EditorUtility.SetDirty(viewmodel);
+            PlayerAvatar avatar = playerObject.GetComponent<PlayerAvatar>();
+            if (avatar == null) avatar = playerObject.AddComponent<PlayerAvatar>();
+            avatar.model = OptionalModel("PlayerCharacter");
+            EditorUtility.SetDirty(avatar);
 
             CharacterController characterController = playerObject.GetComponent<CharacterController>();
             if (characterController == null) characterController = playerObject.AddComponent<CharacterController>();
@@ -648,6 +655,47 @@ namespace GoldenHour.EditorTools
         {
             if (AssetDatabase.IsValidFolder("Assets/TutorialInfo")) AssetDatabase.DeleteAsset("Assets/TutorialInfo");
             if (File.Exists("Assets/Readme.asset")) AssetDatabase.DeleteAsset("Assets/Readme.asset");
+        }
+
+        /// <summary>The skinned main character: skinning, legacy clips, height, facing +Z and left side on -X.</summary>
+        private static void ValidatePlayerCharacter()
+        {
+            string path = ModelPath + "PlayerCharacter.fbx";
+            GameObject character = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            Require(character != null, "Blender export PlayerCharacter.fbx is missing.");
+            SkinnedMeshRenderer skin = character.GetComponentInChildren<SkinnedMeshRenderer>(true);
+            Require(skin != null && skin.sharedMesh != null && skin.sharedMesh.vertexCount > 2000 && skin.bones.Length >= 17,
+                "PlayerCharacter needs a skinned body mesh bound to its armature.");
+            Require(skin.sharedMesh.boneWeights.Length == skin.sharedMesh.vertexCount, "Every PlayerCharacter vertex needs bone weights.");
+            Animation legacy = character.GetComponentInChildren<Animation>(true);
+            List<string> clipNames = AssetDatabase.LoadAllAssetsAtPath(path).OfType<AnimationClip>()
+                .Where(c => !c.name.StartsWith("__preview__")).Select(c => c.name).ToList();
+            foreach (string clip in new[] { "Idle", "Walk", "Run", "Kneel" })
+            {
+                Require(clipNames.Any(n => n.Contains(clip)), "PlayerCharacter is missing the " + clip + " animation (found: " + string.Join(", ", clipNames) + ").");
+            }
+
+            Require(legacy != null && AssetDatabase.LoadAllAssetsAtPath(path).OfType<AnimationClip>().All(c => c.legacy || c.name.StartsWith("__preview__")),
+                "PlayerCharacter clips must import as legacy Animation clips.");
+            Transform root = character.transform;
+            Vector3 Local(string bone)
+            {
+                Transform t = TreatmentVisuals.FindDeep(root, bone);
+                Require(t != null, "PlayerCharacter has no bone " + bone + ".");
+                return root.InverseTransformPoint(t.position);
+            }
+
+            Vector3 head = Local("Head");
+            Vector3 foot = Local("Foot.L");
+            Vector3 toe = Local("Toe.L");
+            Vector3 leftArm = Local("UpperArm.L");
+            Vector3 nose = Local("Nose");
+            Require(head.y > 1.5f && head.y < 1.7f && foot.y < 0.2f && foot.y > -0.05f, "PlayerCharacter must stand about 1.8 m tall on the ground: head " + head + ", foot " + foot);
+            Require(toe.z > foot.z + 0.08f && nose.z > head.z + 0.05f, "PlayerCharacter must face +Z (toes and nose forward): toe " + toe + ", nose " + nose);
+            Require(leftArm.x < -0.1f, "PlayerCharacter's left arm must be on -X: " + leftArm);
+            Debug.Log("Player character check: " + skin.sharedMesh.vertexCount + " vertices, " + skin.bones.Length + " bones, clips " +
+                      string.Join(", ", clipNames) + ", head y " + head.y.ToString("0.00") + ", toe z " + toe.z.ToString("0.00") +
+                      ", nose z " + nose.z.ToString("0.00") + ", left arm x " + leftArm.x.ToString("0.00"));
         }
 
         /// <summary>Bounds of a model part (all its meshes) in the model root's space, which is how it is attached at runtime.</summary>
